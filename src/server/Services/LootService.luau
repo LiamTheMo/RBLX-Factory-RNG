@@ -69,36 +69,61 @@ local function connectTouchPickup(part: BasePart)
 	end)
 end
 
+-- Matches the client glass HUD: a translucent slate pill with a booster-colored rim and dot.
 local function addDisplay(part: BasePart, booster: any): BillboardGui
+	local color = Color3.fromRGB(booster.Color[1], booster.Color[2], booster.Color[3])
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "BoosterLabel"
 	billboard.Enabled = false
 	billboard.Adornee = part
 	billboard.AlwaysOnTop = true
 	billboard.MaxDistance = 70
-	billboard.Size = UDim2.fromOffset(144, 28)
-	billboard.StudsOffset = Vector3.new(0, 1.05, 0)
+	billboard.Size = UDim2.fromOffset(176, 44)
+	billboard.StudsOffset = Vector3.new(0, 1.35, 0)
 	billboard.Parent = part
-	-- Matches the client glass HUD: translucent slate pill with a booster-colored rim.
-	local label = Instance.new("TextLabel")
-	label.BackgroundColor3 = HudTheme.Colors.Glass
-	label.BackgroundTransparency = HudTheme.Transparency.Glass
-	label.BorderSizePixel = 0
-	label.Size = UDim2.fromScale(1, 1)
-	label.Font = HudTheme.Fonts.Bold
-	label.Text = booster.DisplayName
-	label.TextColor3 = HudTheme.Colors.Text
-	label.TextSize = 12
-	label.TextWrapped = false
-	label.Parent = billboard
+	local pill = Instance.new("Frame")
+	pill.Name = "Pill"
+	pill.Size = UDim2.fromScale(1, 1)
+	pill.BackgroundColor3 = HudTheme.Colors.Glass
+	pill.BackgroundTransparency = HudTheme.Transparency.Glass
+	pill.BorderSizePixel = 0
+	pill.Parent = billboard
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(1, 0)
-	corner.Parent = label
+	corner.Parent = pill
 	local rim = Instance.new("UIStroke")
 	rim.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	rim.Color = Color3.fromRGB(booster.Color[1], booster.Color[2], booster.Color[3])
-	rim.Transparency = 0.35
-	rim.Parent = label
+	rim.Color = color
+	rim.Transparency = 0.3
+	rim.Parent = pill
+	local dot = Instance.new("Frame")
+	dot.Name = "Dot"
+	dot.AnchorPoint = Vector2.new(0, 0.5)
+	dot.Position = UDim2.new(0, 14, 0.5, 0)
+	dot.Size = UDim2.fromOffset(14, 14)
+	dot.BackgroundColor3 = color
+	dot.BorderSizePixel = 0
+	dot.Parent = pill
+	local dotCorner = Instance.new("UICorner")
+	dotCorner.CornerRadius = UDim.new(1, 0)
+	dotCorner.Parent = dot
+	local function text(name: string, value: string, y: number, height: number, font: Font, size: number, textColor: Color3): TextLabel
+		local label = Instance.new("TextLabel")
+		label.Name = name
+		label.BackgroundTransparency = 1
+		label.Position = UDim2.new(0, 36, 0, y)
+		label.Size = UDim2.new(1, -48, 0, height)
+		label.FontFace = font
+		label.Text = value
+		label.TextColor3 = textColor
+		label.TextSize = size
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextTruncate = Enum.TextTruncate.AtEnd
+		label.Parent = pill
+		return label
+	end
+	text("Label", booster.DisplayName, 4, 20, HudTheme.Fonts.Bold, 14, HudTheme.Colors.Text)
+	text("Hint", "Walk over to collect", 23, 16, HudTheme.Fonts.Medium, 11, HudTheme.Colors.Muted)
 	return billboard
 end
 
