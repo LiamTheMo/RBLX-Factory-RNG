@@ -10,9 +10,14 @@ local Visuals = require(Shared.MachineVisualConfig)
 local GlassUI = require(script.Parent.GlassUI)
 local Theme = GlassUI.Theme
 
+local CubeTypeDefinitions = require(Shared.CubeTypeDefinitions)
+
 local Controller = {}
 local started = false
 local billboard: BillboardGui
+local typeDot: Frame
+local typeLabel: TextLabel
+local chainChip: Frame
 local valueLabel: TextLabel
 local details: TextLabel
 
@@ -32,13 +37,17 @@ function Controller.focusItem(item: Instance?): boolean
 	billboard.Adornee = item
 	billboard.StudsOffsetWorldSpace = Vector3.new(0, item.Size.Y / 2 + 1.2, 0)
 	billboard.Enabled = true
-	valueLabel.Text = "Sale " .. NumberFormatter.format(number("ItemSaleValue", number("ItemValue", 0))) .. " Coins"
+	local typeId = item:GetAttribute("ItemType")
+	local cubeType = CubeTypeDefinitions.get(if type(typeId) == "string" then typeId else "Standard")
+	typeLabel.Text = (if cubeType then cubeType.DisplayName else tostring(typeId or "Standard")) .. " cube"
+	typeDot.BackgroundColor3 = if cubeType then GlassUI.fromRgb(cubeType.Color) else Theme.Colors.Text
+	local chainText = (chainChip :: any).Text :: TextLabel
+	chainText.Text = "chain ×" .. NumberFormatter.format(number("ItemChainMultiplier", 1))
+	valueLabel.Text = NumberFormatter.format(number("ItemSaleValue", number("ItemValue", 0))) .. " Coins"
 	local modifiers = item:GetAttribute("ItemModifiers")
-	details.Text = string.format("%s · chain ×%s · sale ×%s\n%s\n+%s bonus · %s",
-		item:GetAttribute("ItemType") or "Standard",
-		NumberFormatter.format(number("ItemChainMultiplier", 1)),
+	details.Text = string.format("Upgrades: %s\nSale ×%s · +%s · %s",
+		if type(modifiers) == "string" and modifiers ~= "" then modifiers else "none yet",
 		NumberFormatter.format(number("ItemSaleMultiplier", 1)),
-		if type(modifiers) == "string" and modifiers ~= "" then modifiers else "No upgrades yet",
 		NumberFormatter.format(number("ItemAdditiveBonus", 0)),
 		item:GetAttribute("ItemSaleLayers") or "No sale bonuses")
 	return true
@@ -50,35 +59,42 @@ function Controller.start()
 	local player = Players.LocalPlayer
 	billboard = Instance.new("BillboardGui")
 	billboard.Name = "CubeValueHover"
-	billboard.Size = UDim2.fromOffset(260, 104)
+	billboard.Size = UDim2.fromOffset(270, 112)
 	billboard.AlwaysOnTop = true
 	billboard.MaxDistance = Visuals.Feedback.HoverDistance
 	billboard.Enabled = false
 	billboard.Parent = player:WaitForChild("PlayerGui")
 	local frame = GlassUI.glass(billboard, "Frame", Theme.Radius.Card)
 	frame.Size = UDim2.fromScale(1, 1)
-	valueLabel = Instance.new("TextLabel")
-	valueLabel.Name = "Value"
-	valueLabel.Position = UDim2.fromOffset(12, 8)
-	valueLabel.Size = UDim2.new(1, -24, 0, 20)
-	valueLabel.BackgroundTransparency = 1
+	typeDot = Instance.new("Frame")
+	typeDot.Name = "TypeDot"
+	typeDot.Position = UDim2.fromOffset(12, 13)
+	typeDot.Size = UDim2.fromOffset(12, 12)
+	typeDot.BorderSizePixel = 0
+	GlassUI.round(typeDot)
+	GlassUI.stroke(typeDot, Theme.Colors.Stroke, 0.5)
+	typeDot.Parent = frame
+	typeLabel = GlassUI.label(frame, "CubeType", "", 13, Theme.Fonts.Bold)
+	typeLabel.Position = UDim2.fromOffset(30, 8)
+	typeLabel.Size = UDim2.new(1, -130, 0, 22)
+	typeLabel.TextWrapped = false
+	typeLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	chainChip = GlassUI.chip(frame, "Chain", "", Theme.Colors.Accent, 11)
+	chainChip.AnchorPoint = Vector2.new(1, 0)
+	chainChip.Position = UDim2.new(1, -10, 0, 8)
+	local coin = GlassUI.icon(frame, "Coin")
+	coin.Position = UDim2.fromOffset(12, 38)
+	coin.Size = UDim2.fromOffset(22, 22)
+	valueLabel = GlassUI.label(frame, "Value", "", 22, Theme.Fonts.Heavy)
+	valueLabel.Position = UDim2.fromOffset(40, 34)
+	valueLabel.Size = UDim2.new(1, -52, 0, 30)
 	valueLabel.TextColor3 = Theme.Colors.Coin
-	valueLabel.Font = Theme.Fonts.Heavy
-	valueLabel.TextSize = 15
-	valueLabel.TextXAlignment = Enum.TextXAlignment.Left
-	valueLabel.Parent = frame
-	details = Instance.new("TextLabel")
-	details.Name = "Modifiers"
-	details.Position = UDim2.fromOffset(12, 32)
-	details.Size = UDim2.new(1, -24, 1, -40)
-	details.BackgroundTransparency = 1
+	valueLabel.TextWrapped = false
+	details = GlassUI.label(frame, "Modifiers", "", 11, Theme.Fonts.Medium)
+	details.Position = UDim2.fromOffset(12, 68)
+	details.Size = UDim2.new(1, -24, 1, -74)
 	details.TextColor3 = Theme.Colors.Muted
-	details.Font = Theme.Fonts.Medium
-	details.TextSize = 11
-	details.TextXAlignment = Enum.TextXAlignment.Left
-	details.TextWrapped = true
 	details.TextYAlignment = Enum.TextYAlignment.Top
-	details.Parent = frame
 	local mouse = player:GetMouse()
 	local touchItem: Instance? = nil
 	local touchUntil = 0

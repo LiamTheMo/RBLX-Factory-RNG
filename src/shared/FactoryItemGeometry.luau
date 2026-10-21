@@ -18,6 +18,11 @@ function Geometry.machineLift(): number
 	return belt.DeckCenterY + belt.Elevation + belt.DeckThickness / 2 - Visuals.MachineProfileBaseDeckTop
 end
 
+-- Height where a new cube appears: just under the dropper housing, wherever the belt sits.
+function Geometry.dropStartY(): number
+	return Geometry.machineLift() + Visuals.ConveyorItem.DropStartAboveLift
+end
+
 function Geometry.physicalSlot(layout: { string? }, routeIndex: number): number
 	local current = 0
 	for slot = 1, Layout.SlotCount do
@@ -44,7 +49,8 @@ function Geometry.itemPosition(layout: { string? }, item: any): (number, number,
 		local fallFraction = math.clamp(cube.DropDurationSeconds / Config.TravelTimePerSlotSeconds, 0.05, 0.9)
 		local fall = math.clamp(progress / fallFraction, 0, 1)
 		local easedFall = fall * fall * (3 - 2 * fall)
-		y = cube.DropStartHeight + belt.Elevation + (landing - cube.DropStartHeight - belt.Elevation) * easedFall
+		local dropStart = Geometry.dropStartY()
+		y = dropStart + (landing - dropStart) * easedFall
 		if progress > fallFraction then x += ((progress - fallFraction) / (1 - fallFraction)) * distance end
 	else
 		x += progress * distance

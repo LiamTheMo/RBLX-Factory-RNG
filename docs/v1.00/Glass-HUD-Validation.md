@@ -29,6 +29,31 @@ action; it opens from the Inventory button or by clicking a conveyor area.
 Server authority is unchanged: placement, move, return, recycle, booster use, capacity
 and free rolls still go through the existing validated remotes.
 
+## Round 2: conveyor, placement, items and roll reveal
+
+- **Placement:** the inventory Place button and area picker are gone; players place by
+  clicking a conveyor slot (or the machine on it). Area text labels above the belt are
+  removed. Each slot has an invisible `SlotSelector_n` click plate flush with the belt,
+  and the client draws a translucent selection box: faint and softly pulsing on empty
+  slots, amber while hovered or while that slot's placement panel is open.
+- **Conveyor:** one continuous rubber belt between two drums on a low base that rests on
+  the ground (no legs), steel side rails rising from the ground with a light lip, an amber
+  safety stripe (coral at the seller bay) and rail bolts. Client-only cleats ride every
+  nearby belt toward the seller at item speed (`ConveyorController`, one 30 Hz
+  `BulkMoveTo` loop). Items and machines follow the lower belt through the shared
+  geometry, and the build uses fewer parts than before.
+- **Fonts:** every UI string uses `FontFace` from `HudTheme`: Fredoka One for headings
+  and numbers, Nunito for text (also on machine badges and booster labels).
+- **Items:** produced cubes use SmoothPlastic; the cube tooltip shows a type dot and
+  name, a chain chip, a coin icon with the sale value and the upgrade/sale breakdown;
+  sale popups show a coin icon and the amount; booster drops get a two-line glass pill.
+- **Roll reveal (`RollRevealController`):** blurred, dimmed stage with a virtualised reel
+  of rarity-tinted machine cards (weighted by the real roll chances) that spins while the
+  server answers, eases onto the result under a centre marker and pops the landed card.
+  A result card follows with a rotating 3D preview, rarity title, name, rarity/odds/
+  category chips and description. Rare+ adds rotating light rays, Epic+ sparkles, and
+  ultra-rare odds a colored flash and a longer hold. Click skips the spin or dismisses.
+
 ## Completed / Passed
 
 - Luau compilation, all pure Luau suites (including the new layout spec across eleven
@@ -51,6 +76,12 @@ and free rolls still go through the existing validated remotes.
   `AmberUI`, `AmberLayout` and `DebugHudController` ModuleScripts stay in the live
   place. Nothing requires them, so they create no UI; remove them in Studio when
   convenient.
+
+- Round 2 visuals in a live session: conveyor look and cleat direction on rotated
+  plots, selection-box hover/selected states with mouse and touch, the reel spin and
+  landing feel, result card readability on phones, and frame time with six plots.
+- Font families (`Nunito`, `FredokaOne`) are built-in Roblox fonts; confirm rendering.
+- Audio for roll ticks and reveal is not added; Phase 9 still requires licensed sounds.
 
 ## Incomplete / Needs Work
 

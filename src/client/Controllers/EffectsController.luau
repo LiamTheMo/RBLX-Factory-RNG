@@ -8,11 +8,10 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local EconomyConfig = require(Shared:WaitForChild("EconomyConfig"))
 local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
-local MachineDefinitions = require(Shared:WaitForChild("MachineDefinitions"))
 local FloatingText = require(script.Parent.FloatingText)
 local NumberFormatter = require(Shared:WaitForChild("NumberFormatter"))
-local EconomyRules = require(Shared:WaitForChild("EconomyRules"))
 local GlassUI = require(script.Parent.GlassUI)
+local RollReveal = require(script.Parent.RollRevealController)
 
 local Theme = GlassUI.Theme
 local C = Theme.Colors
@@ -23,7 +22,6 @@ local FADE = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local EffectsController = {}
 local handlers: { [string]: ({ [string]: any }) -> () } = {}
 local started = false
-local sequence = 0
 local toastSequence = 0
 
 local rarityColors: { [string]: Color3 } = {}
@@ -73,117 +71,7 @@ function EffectsController.start()
 	gui.IgnoreGuiInset = true
 	gui.ScreenInsets = Enum.ScreenInsets.None
 
-	-- Full-screen dim plus a camera blur keep the world visible behind the glass reveal.
-	local overlay = Instance.new("Frame")
-	overlay.Name = "CutsceneOverlay"
-	overlay.Size = UDim2.fromScale(1, 1)
-	overlay.BackgroundColor3 = C.Overlay
-	overlay.BackgroundTransparency = 1
-	overlay.BorderSizePixel = 0
-	overlay.Visible = false
-	overlay.Parent = gui
-
-	local reveal = Instance.new("CanvasGroup")
-	reveal.Name = "RevealPanel"
-	reveal.AnchorPoint = Vector2.new(0.5, 0.5)
-	reveal.Position = UDim2.fromScale(0.5, 0.46)
-	reveal.Size = UDim2.new(0.9, 0, 0, 210)
-	reveal.BackgroundTransparency = 1
-	reveal.BorderSizePixel = 0
-	reveal.Parent = overlay
-	-- A gradient on the CanvasGroup itself would tint its text, so the glass is a child,
-	-- inset so the outer stroke is not clipped by the group bounds.
-	local revealBackdrop = GlassUI.glass(reveal, "Backdrop", 22)
-	revealBackdrop.Position = UDim2.fromOffset(2, 2)
-	revealBackdrop.Size = UDim2.new(1, -4, 1, -4)
-	local revealStroke = revealBackdrop:FindFirstChildOfClass("UIStroke") :: UIStroke
-	revealStroke.Thickness = 2
-	revealStroke.Transparency = 0.6
-	local revealLimit = Instance.new("UISizeConstraint")
-	revealLimit.MaxSize = Vector2.new(620, 210)
-	revealLimit.Parent = reveal
-	local scale = Instance.new("UIScale")
-	scale.Parent = reveal
-	local pulse: Tween? = nil
-
-	local heading = Instance.new("TextLabel")
-	heading.Name = "Heading"
-	heading.Position = UDim2.new(0, 20, 0, 22)
-	heading.Size = UDim2.new(1, -40, 0, 40)
-	heading.BackgroundTransparency = 1
-	heading.TextColor3 = C.Text
-	heading.Font = Theme.Fonts.Heavy
-	heading.TextScaled = true
-	local headingTextLimit = Instance.new("UITextSizeConstraint")
-	headingTextLimit.MinTextSize = 20
-	headingTextLimit.MaxTextSize = 36
-	headingTextLimit.Parent = heading
-	heading.Parent = reveal
-
-	local card = Instance.new("TextLabel")
-	card.Name = "RevealCard"
-	card.Position = UDim2.new(0, 20, 0, 70)
-	card.Size = UDim2.new(1, -40, 0, 92)
-	card.BackgroundTransparency = 1
-	card.BorderSizePixel = 0
-	card.TextColor3 = C.Text
-	card.Font = Theme.Fonts.Heavy
-	card.TextScaled = true
-	card.TextWrapped = true
-	local cardTextLimit = Instance.new("UITextSizeConstraint")
-	cardTextLimit.MinTextSize = 22
-	cardTextLimit.MaxTextSize = 48
-	cardTextLimit.Parent = card
-	card.Parent = reveal
-
-	local footnote = Instance.new("TextLabel")
-	footnote.Name = "Footnote"
-	footnote.Position = UDim2.new(0, 20, 1, -40)
-	footnote.Size = UDim2.new(1, -40, 0, 20)
-	footnote.BackgroundTransparency = 1
-	footnote.TextColor3 = C.Muted
-	footnote.Font = Theme.Fonts.Medium
-	footnote.TextSize = 13
-	footnote.Text = ""
-	footnote.Parent = reveal
-
-	local blur = Instance.new("BlurEffect")
-	blur.Name = "RollRevealBlur"
-	blur.Size = 0
-	blur.Enabled = false
-
-	local function attachBlur()
-		local camera = workspace.CurrentCamera
-		if camera and blur.Parent ~= camera then
-			blur.Parent = camera
-		end
-	end
-
-	local function showOverlay(accent: Color3)
-		attachBlur()
-		revealStroke.Color = accent
-		-- Always fade in: a new roll can start while the previous reveal is still fading out.
-		if not overlay.Visible then
-			overlay.Visible = true
-			reveal.GroupTransparency = 1
-		end
-		blur.Enabled = true
-		TweenService:Create(reveal, FADE, { GroupTransparency = 0 }):Play()
-		TweenService:Create(blur, FADE, { Size = Theme.RevealBlurSize }):Play()
-		TweenService:Create(overlay, FADE, { BackgroundTransparency = Theme.Transparency.Overlay }):Play()
-	end
-
-	local function hideOverlay(token: number)
-		TweenService:Create(overlay, FADE, { BackgroundTransparency = 1 }):Play()
-		TweenService:Create(reveal, FADE, { GroupTransparency = 1 }):Play()
-		TweenService:Create(blur, FADE, { Size = 0 }):Play()
-		task.delay(FADE.Time, function()
-			if token == sequence then
-				overlay.Visible = false
-				blur.Enabled = false
-			end
-		end)
-	end
+	local reveal = RollReveal.mount(gui)
 
 	-- Toast pill sits just below Roblox's top bar.
 	local toast = Instance.new("CanvasGroup")
@@ -231,7 +119,7 @@ function EffectsController.start()
 	toastText.AutomaticSize = Enum.AutomaticSize.X
 	toastText.Size = UDim2.fromOffset(0, 46)
 	toastText.BackgroundTransparency = 1
-	toastText.Font = Theme.Fonts.Bold
+	toastText.FontFace = Theme.Fonts.Bold
 	toastText.TextSize = 15
 	toastText.TextColor3 = C.Text
 	toastText.TextTruncate = Enum.TextTruncate.AtEnd
@@ -267,111 +155,16 @@ function EffectsController.start()
 	end
 
 	EffectsController.register("RollPending", function()
-		sequence += 1
-		if pulse then
-			pulse:Cancel()
-		end
-		showOverlay(C.Stroke)
-		heading.Text = "ROLLING A MACHINE"
-		heading.TextColor3 = C.Text
-		card.Text = "? ? ?"
-		card.TextColor3 = C.Text
-		footnote.Text = "Free roll · results come from the server"
-		scale.Scale = 1
-		pulse = TweenService:Create(scale, TweenInfo.new(0.42, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.04 })
-		pulse:Play()
+		reveal.pending()
 	end)
-
-	EffectsController.register("UltraRareRollCutscene", function(payload)
-		sequence += 1
-		local token = sequence
-		if pulse then
-			pulse:Cancel()
-		end
-		local rarity = payload.Rarity or "Legendary"
-		local rarityColor = getRarityColor(rarity)
-		showOverlay(rarityColor)
-		heading.Text = "ULTRA RARE MACHINE!"
-		heading.TextColor3 = rarityColor
-		card.TextColor3 = C.Text
-		card.Text = string.format("%s · %s", payload.MachineName or "New machine", payload.Odds or "1/?")
-		footnote.Text = "Open Inventory to place it"
-		scale.Scale = 0.72
-		TweenService:Create(scale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-		task.delay(EconomyConfig.UltraRareCutscene.DurationSeconds, function()
-			if token == sequence then
-				hideOverlay(token)
-			end
-		end)
-	end)
-
 	EffectsController.register("MachineRolled", function(payload)
-		sequence += 1
-		local token = sequence
-		if pulse then
-			pulse:Cancel()
-		end
-		showOverlay(C.Stroke)
-		heading.Text = "ROLLING A MACHINE"
-		heading.TextColor3 = C.Text
-		footnote.Text = ""
-		local basePool = MachineDefinitions.getRollPool()
-		local luckMultiplier = payload.LuckMultiplier or 1
-		local pool = EconomyRules.getLuckAdjustedRollPool(basePool, luckMultiplier)
-		local definition = MachineDefinitions.get(payload.MachineId or "")
-		local rarity = payload.Rarity or (definition and EconomyRules.getMachineRarity(definition.Id, pool)) or "Common"
-		local odds = if definition then EconomyRules.getMachineOddsLabel(definition.Id, pool) else nil
-		task.spawn(function()
-			for index = 1, 16 do
-				if token ~= sequence then
-					return
-				end
-				local sample = pool[(index * 7) % #pool + 1]
-				local sampleOdds = EconomyRules.getMachineOddsLabel(sample.Id, pool) or "1/?"
-				card.Text = string.format("%s · %s", sample.DisplayName, sampleOdds)
-				local sampleRarity = EconomyRules.getMachineRarity(sample.Id, pool) or sample.Rarity
-				card.TextColor3 = getRarityColor(sampleRarity)
-				card.Rotation = if index % 2 == 0 then 1.5 else -1.5
-				task.wait(0.045 + index * 0.005)
-			end
-			if token ~= sequence then
-				return
-			end
-			local rarityColor = getRarityColor(rarity)
-			card.Rotation = 0
-			card.Text = if definition and odds then string.format("%s · %s", definition.DisplayName, odds) else "New machine"
-			card.TextColor3 = C.Text
-			heading.Text = string.upper(rarity) .. " MACHINE!"
-			heading.TextColor3 = rarityColor
-			revealStroke.Color = rarityColor
-			footnote.Text = if luckMultiplier > 1 then string.format("Luck ×%.2f applied · open Inventory to place it", luckMultiplier) else "Open Inventory to place it"
-			scale.Scale = 1.12
-			TweenService:Create(scale, TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-			local oddsDenominator = if definition then EconomyRules.getMachineOddsDenominator(definition.Id, pool) else nil
-			if EconomyRules.shouldPlayUltraRareCutscene(oddsDenominator) then
-				task.wait(0.55)
-				if token == sequence then
-					EffectsController.play("UltraRareRollCutscene", {
-						MachineName = definition.DisplayName,
-						Rarity = rarity,
-						Odds = odds or "1/?",
-					})
-				end
-				return
-			end
-			task.wait(1.4)
-			if token == sequence then
-				hideOverlay(token)
-			end
-		end)
+		reveal.rolled(payload.MachineId, payload.Rarity, payload.LuckMultiplier)
 	end)
-
+	EffectsController.register("UltraRareRollCutscene", function(payload)
+		reveal.ultra(payload.MachineName or "New machine", payload.Rarity or "Legendary", payload.Odds or "")
+	end)
 	EffectsController.register("RollRejected", function(payload)
-		sequence += 1
-		if pulse then
-			pulse:Cancel()
-		end
-		hideOverlay(sequence)
+		reveal.cancel()
 		showToast(payload.Reason or "Roll unavailable", C.Bad)
 	end)
 	EffectsController.register("FirstItemSpawned", function()
@@ -379,7 +172,7 @@ function EffectsController.start()
 	end)
 	EffectsController.register("ItemSold", function(payload)
 		if type(payload.Coins) == "number" and payload.Coins > 0 and typeof(payload.Position) == "Vector3" then
-			FloatingText.show(payload.Position, "+" .. NumberFormatter.format(payload.Coins) .. " Coins", C.Coin)
+			FloatingText.show(payload.Position, "+" .. NumberFormatter.format(payload.Coins), C.Coin)
 		end
 	end)
 	EffectsController.register("FirstItemSold", function()
