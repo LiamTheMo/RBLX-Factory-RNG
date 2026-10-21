@@ -53,6 +53,26 @@ function Controller.focusItem(item: Instance?): boolean
 	return true
 end
 
+-- Booster floor drops keep their server-made label hidden; show it only while hovered/tapped.
+local focusedDrop: BillboardGui? = nil
+function Controller.focusDrop(target: Instance?): boolean
+	local label: BillboardGui? = nil
+	if target and target:IsA("BasePart") and target:GetAttribute("BoosterId") ~= nil and target:GetAttribute("Landed") == true then
+		local candidate = target:FindFirstChild("BoosterLabel")
+		if candidate and candidate:IsA("BillboardGui") then
+			label = candidate
+		end
+	end
+	if focusedDrop and focusedDrop ~= label then
+		focusedDrop.Enabled = false
+	end
+	focusedDrop = label
+	if label then
+		label.Enabled = true
+	end
+	return label ~= nil
+end
+
 function Controller.start()
 	if started then return end
 	started = true
@@ -115,7 +135,9 @@ function Controller.start()
 		elapsed += deltaTime
 		if elapsed < 0.1 then return end
 		elapsed = 0
-		Controller.focusItem(if os.clock() < touchUntil then touchItem else mouse.Target)
+		local target = if os.clock() < touchUntil then touchItem else mouse.Target
+		Controller.focusItem(target)
+		Controller.focusDrop(target)
 	end)
 end
 

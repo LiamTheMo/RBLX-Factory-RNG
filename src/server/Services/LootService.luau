@@ -180,7 +180,7 @@ local function spawnLoot(player: Player)
 	local fallConfig = BoosterConfig.Fall
 	local part = Instance.new("Part")
 	part.Name = "WorldBoosterDrop"
-	part.Shape = Enum.PartType.Ball
+	part.Shape = Enum.PartType.Block
 	part.Material = Enum.Material.Neon
 	part.Color = Color3.fromRGB(booster.Color[1], booster.Color[2], booster.Color[3])
 	part.Size = Vector3.new(fallConfig.StartingSize, fallConfig.StartingSize, fallConfig.StartingSize)
@@ -188,13 +188,16 @@ local function spawnLoot(player: Player)
 	part.Anchored = true
 	part.CanCollide = false
 	part.CanTouch = false
-	part.Position = landingPosition + Vector3.new(0, fallConfig.DropHeight, 0)
+	-- A turned cube reads as a gem; the fall tween moves Position, so the turn is kept.
+	part.CFrame = CFrame.new(landingPosition + Vector3.new(0, fallConfig.DropHeight, 0))
+		* CFrame.Angles(math.rad(12), math.rad(random:NextNumber(0, 90)), math.rad(12))
 	part:SetAttribute("BoosterId", booster.Id)
 	part:SetAttribute("SourcePlotUserId", player.UserId)
 	part:SetAttribute("Claimed", false)
 	part:SetAttribute("Landed", false)
 	part.Parent = folder
-	local billboard = addDisplay(part, booster)
+	-- The label stays disabled here; clients show it only while the drop is hovered or tapped.
+	addDisplay(part, booster)
 	connectTouchPickup(part)
 	local drops = activeDrops[player]
 	if not drops then drops = {}; activeDrops[player] = drops end
@@ -216,7 +219,6 @@ local function spawnLoot(player: Player)
 		end
 		part:SetAttribute("Landed", true)
 		part.CanTouch = true
-		billboard.Enabled = true
 		light.Enabled = true
 	end)
 	landingTween:Play()

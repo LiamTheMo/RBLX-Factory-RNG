@@ -321,6 +321,12 @@ local success, message = pcall(function()
 	local targetDrop = findDropFunction:InvokeServer()
 	assert(targetDrop and targetDrop:IsA("BasePart") and targetDrop:GetAttribute("Landed") == true and not targetDrop.CanTouch, "test booster was not held after landing")
 	assert(not targetDrop:FindFirstChildOfClass("ProximityPrompt"), "world booster should not need an interaction prompt")
+	assert(targetDrop.Shape == Enum.PartType.Block, "floor booster drops should be cubes")
+	local dropLabel = targetDrop:FindFirstChild("BoosterLabel") :: BillboardGui
+	assert(dropLabel and not dropLabel.Enabled, "floor drop labels should stay hidden until hovered")
+	assert(hover.focusDrop(targetDrop) and dropLabel.Enabled, "hovering or tapping a drop should show its label")
+	hover.focusDrop(nil)
+	assert(not dropLabel.Enabled, "the drop label should hide again when focus moves away")
 	local character = player.Character or player.CharacterAdded:Wait()
 	local root = character:WaitForChild("HumanoidRootPart") :: BasePart
 	root.CFrame = CFrame.new(targetDrop.Position + Vector3.new(0, 8, 0))
