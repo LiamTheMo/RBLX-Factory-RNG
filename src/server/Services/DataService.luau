@@ -138,6 +138,7 @@ local function savePlayer(player: Player, releaseLock: boolean?)
 		return
 	end
 	player:SetAttribute("FactoryDataSaved", true)
+	player:SetAttribute("FactoryDataSaveError", nil)
 	if releaseLock then
 		loadedPlayers[player] = nil
 		sessionIds[player] = nil
