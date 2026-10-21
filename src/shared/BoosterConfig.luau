@@ -2,18 +2,21 @@
 
 return {
 	WorldFolderName = "TinyFactoryBoosters",
-	SpawnIntervalSeconds = 12,
-	MaxActiveDropsPerFactory = 3,
-	MaxActiveDropsWorldwide = 24,
-	DespawnAfterSeconds = 45,
+	-- One drop per player per minute, anywhere on the map, each lasting five minutes.
+	SpawnIntervalSeconds = 60,
+	MaxActiveDropsPerFactory = 5,
+	MaxActiveDropsWorldwide = 30,
+	DespawnAfterSeconds = 300,
 	MaxLuckDurationSeconds = 120,
 	MaxSaleValueDurationSeconds = 120,
 	MaxStoredPerType = 99,
-	SpawnBounds = { MinX = 1.5, MaxX = 26.5, MinZ = -2.5, MaxZ = 2.5 },
+	-- Drops land on dry ground anywhere within Radius of the hub, above the waterline and
+	-- no higher than the tallest walkable field piece (keeps them off roofs and canopies).
+	MapSpawn = { Radius = 340, MinAboveWater = 0.5, MaxAboveFieldTop = 4 },
 	LandRaycast = {
 		StartHeight = 120,
 		Distance = 240,
-		PositionAttempts = 8,
+		PositionAttempts = 32,
 		MinimumGroundNormalY = 0.7,
 	},
 	Fall = {

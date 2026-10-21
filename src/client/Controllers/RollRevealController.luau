@@ -14,6 +14,7 @@ local EconomyRules = require(Shared:WaitForChild("EconomyRules"))
 local MachineDefinitions = require(Shared:WaitForChild("MachineDefinitions"))
 local MachineVisualConfig = require(Shared:WaitForChild("MachineVisualConfig"))
 local ModelBuilder = require(Shared:WaitForChild("MachineModelBuilder"))
+local MachineEffects = require(Shared:WaitForChild("MachineEffects"))
 local GlassUI = require(script.Parent.GlassUI)
 
 local Theme = GlassUI.Theme
@@ -29,7 +30,6 @@ local SPIN_SPEED = 20 -- cards per second while waiting for the server
 local LAND_SECONDS = 2.6
 local FADE = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local POP = TweenInfo.new(0.34, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-local CATEGORY_NAMES = { Producer = "Dropper", Processor = "Upgrader", Seller = "Seller" }
 local CATEGORY_GLYPHS = { Producer = "▼", Processor = "◆", Seller = "$" }
 
 local rarityColors: { [string]: Color3 } = {}
@@ -288,16 +288,17 @@ function RollReveal.mount(gui: ScreenGui)
 	tags.Name = "Tags"
 	tags.BackgroundTransparency = 1
 	tags.Position = UDim2.fromOffset(244, 154)
-	tags.Size = UDim2.new(1, -268, 0, 26)
+	tags.Size = UDim2.new(1, -268, 0, 60)
 	tags.Parent = result
 	local tagList = Instance.new("UIListLayout")
 	tagList.FillDirection = Enum.FillDirection.Horizontal
 	tagList.Padding = UDim.new(0, 8)
 	tagList.SortOrder = Enum.SortOrder.LayoutOrder
+	tagList.Wraps = true
 	tagList.Parent = tags
 	local description = GlassUI.label(result, "Description", "", 14, Theme.Fonts.Medium)
-	description.Position = UDim2.fromOffset(244, 190)
-	description.Size = UDim2.new(1, -268, 0, 60)
+	description.Position = UDim2.fromOffset(244, 220)
+	description.Size = UDim2.new(1, -268, 0, 40)
 	description.TextColor3 = C.Muted
 	description.TextYAlignment = Enum.TextYAlignment.Top
 	local footnote = GlassUI.label(result, "Footnote", "", 13, Theme.Fonts.Bold)
@@ -578,9 +579,9 @@ function RollReveal.mount(gui: ScreenGui)
 		end
 		local definition = info.Definition
 		if definition then
-			local categoryChip = GlassUI.chip(tags, "Category", CATEGORY_NAMES[definition.Category] or definition.Category, C.Muted, 13)
-			categoryChip.LayoutOrder = 3
-			categoryChip.Size = UDim2.fromOffset(0, 26)
+			local effectChip = GlassUI.chip(tags, "Effect", MachineEffects.tag(definition), C.Text, 13)
+			effectChip.LayoutOrder = 3
+			effectChip.Size = UDim2.fromOffset(0, 26)
 		end
 		description.Text = if definition then definition.Description else ""
 		footnote.Text = "Click a conveyor slot to place it"

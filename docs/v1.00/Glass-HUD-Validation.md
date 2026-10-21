@@ -66,6 +66,29 @@ and free rolls still go through the existing validated remotes.
   (`SaveSchema.toStorage` / `sanitizeForStorage`). A saved layout that is still unusable
   falls back to the default route and returns its rollable machines to inventory.
 
+## Round 4: reliable saves, map-wide drops and effect tags
+
+- **Leave saves:** the final save on leave was skipped whenever `EconomyService` cleared the
+  player's profile before `DataService` ran on the same `PlayerRemoving` signal, so edits
+  made after the last 60-second autosave were lost. `DataService` now snapshots state
+  before any yield, economy/analytics teardown is deferred like the factory teardown, and
+  layout or capacity changes trigger a save eight seconds later.
+- **Slot 4 placements:** every save sanitized live state without a `SchemaVersion`, so the
+  legacy migrations ran again and moved a slot-4 machine back to inventory whenever the
+  default Seller sat in slot 5. Live snapshots are now stamped with the current version
+  (`SaveSchema.liveSnapshot`), with a regression test filling slots 2-4.
+- **Session hand-off:** each join gets a unique session ID; a join that finds the save still
+  locked by the previous server retries for up to a minute; shutdown waits for in-flight
+  leave saves.
+- **Floor drops:** one drop per player per minute lands on dry ground anywhere on the map
+  (only the open platform on plots; never conveyors, machines, lagoon rocks, water, roofs or
+  canopies) and despawns after five minutes. Any loaded
+  player can collect a drop; the spawning player only counts toward the per-player cap.
+- **Effect tags (`MachineEffects`):** every machine has a short tag such as `2× All`,
+  `1.35× Ice`, `Makes Ice`, `Sells 1.4× Ice` or `Every 5th: 3×`. Tags show as the chip on
+  inventory/placement cards (rarity moves to the odds line), on the roll result card, and
+  beside the symbol on each placed machine's identity plate.
+
 ## Completed / Passed
 
 - Luau compilation, all pure Luau suites (including the new layout spec across eleven
@@ -97,6 +120,10 @@ and free rolls still go through the existing validated remotes.
 
 - Round 3 live check: place machines with an empty slot before the seller, rejoin, and
   confirm the layout returns; hover and tap a floor drop to see its label.
+
+- Round 4 live check: place a machine and leave within a few seconds, rejoin, and confirm
+  it stayed; watch drops appear around the map about once a minute per player; read the
+  effect tags on cards, the roll result and placed machines.
 
 ## Incomplete / Needs Work
 

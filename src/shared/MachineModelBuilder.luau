@@ -5,6 +5,7 @@ local Visuals = require(Shared.MachineVisualConfig)
 local Geometry = require(Shared.FactoryItemGeometry)
 local CubeTypeDefinitions = require(Shared.CubeTypeDefinitions)
 local Theme = require(Shared.HudTheme)
+local MachineEffects = require(Shared.MachineEffects)
 local Builder = {}
 
 local function rgb(channels: { number }): Color3
@@ -80,23 +81,39 @@ function Builder.build(parent: Instance, origin: Vector3, slot: number, definiti
 	end
 	local badgeY = if profile.Style == "Dropper" then 2.7 elseif profile.Style == "Seller" then 2.65 else 1.25
 	local badgeZ = if profile.Style == "Seller" then -1.5 else -1.1
-	local identityPlate = part("IdentityPlate", Vector3.new(0.8, 0.65, 0.12), Vector3.new(0, badgeY, badgeZ), primary)
+	-- Identity plate: the machine symbol plus its effect tag (e.g. "1.35× Ice").
+	local identityPlate = part("IdentityPlate", Vector3.new(1.7, 0.7, 0.12), Vector3.new(0, badgeY, badgeZ), primary)
+	local effect = MachineEffects.tag(definition)
 	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
 		local badge = Instance.new("SurfaceGui")
 		badge.Name = "MachineBadge"
 		badge.Face = face
-		badge.CanvasSize = Vector2.new(160, 130)
+		badge.CanvasSize = Vector2.new(340, 140)
 		badge.Parent = identityPlate
 		local icon = Instance.new("TextLabel")
-		icon.Size = UDim2.fromScale(1, 1)
+		icon.Name = "Symbol"
+		icon.Size = UDim2.new(0, 96, 1, 0)
 		icon.BackgroundTransparency = 1
 		icon.Text = variant.Symbol or "•"
 		icon.TextColor3 = accent
 		icon.TextStrokeColor3 = Color3.fromRGB(35, 38, 42)
 		icon.TextStrokeTransparency = 0.25
 		icon.FontFace = Theme.Fonts.Heavy
-		icon.TextSize = 56
+		icon.TextSize = 64
 		icon.Parent = badge
+		local tag = Instance.new("TextLabel")
+		tag.Name = "Effect"
+		tag.Position = UDim2.fromOffset(96, 16)
+		tag.Size = UDim2.new(1, -108, 1, -32)
+		tag.BackgroundTransparency = 1
+		tag.Text = effect
+		tag.TextColor3 = Color3.new(1, 1, 1)
+		tag.TextStrokeColor3 = Color3.fromRGB(35, 38, 42)
+		tag.TextStrokeTransparency = 0.25
+		tag.FontFace = Theme.Fonts.Heavy
+		tag.TextScaled = true
+		tag.TextXAlignment = Enum.TextXAlignment.Left
+		tag.Parent = badge
 	end
 	return model, housing, hitbox
 end
