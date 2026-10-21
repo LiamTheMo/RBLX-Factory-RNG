@@ -61,7 +61,10 @@ function AnalyticsService.start()
 	end
 	started = true
 	Players.PlayerRemoving:Connect(function(player)
-		counters[player] = nil
+		-- Deferred so DataService's final save on the same signal still includes the counters.
+		task.defer(function()
+			counters[player] = nil
+		end)
 	end)
 end
 

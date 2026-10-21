@@ -73,11 +73,15 @@ function BoosterRules.validate(): (boolean, string?)
 		or type(BoosterConfig.MaxStoredPerType) ~= "number" or BoosterConfig.MaxStoredPerType % 1 ~= 0 or BoosterConfig.MaxStoredPerType < 1 then
 		return false, "Booster spawn limits must be positive"
 	end
-	local bounds = BoosterConfig.SpawnBounds
-	if type(bounds) ~= "table"
-		or type(bounds.MinX) ~= "number" or type(bounds.MaxX) ~= "number" or bounds.MinX >= bounds.MaxX
-		or type(bounds.MinZ) ~= "number" or type(bounds.MaxZ) ~= "number" or bounds.MinZ >= bounds.MaxZ then
-		return false, "Booster spawn bounds are invalid"
+	local map = BoosterConfig.MapSpawn
+	if type(map) ~= "table"
+		or type(map.Radius) ~= "number" or map.Radius <= 0
+		or type(map.MinAboveWater) ~= "number" or map.MinAboveWater < 0
+		or type(map.MaxAboveFieldTop) ~= "number" or map.MaxAboveFieldTop < 0 then
+		return false, "Booster map spawn settings are invalid"
+	end
+	if BoosterConfig.MaxActiveDropsPerFactory * BoosterConfig.SpawnIntervalSeconds < BoosterConfig.DespawnAfterSeconds then
+		return false, "Per-player drop cap must cover every drop alive within the despawn window"
 	end
 	local raycast = BoosterConfig.LandRaycast
 	if type(raycast) ~= "table"

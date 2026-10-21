@@ -24,6 +24,10 @@ local savingPlayers: { [Player]: boolean } = {}
 local sessionStartedAt: { [Player]: number } = {}
 
 local SESSION_LOCK_SECONDS = 300
+-- Layout or capacity edits are saved shortly after they happen, not only on the autosave.
+local CHANGE_SAVE_DELAY_SECONDS = 5
+local pendingChangeSave: { [Player]: boolean } = {}
+local watchFactoryChanges: (Player) -> ()
 
 local function sessionIdFor(player: Player): string
 	local jobId = game.JobId
@@ -104,21 +108,16 @@ local function loadPlayer(player: Player)
 	sessionStartedAt[player] = os.time()
 	loadedPlayers[player] = true
 	setLoadStatus(player, true, false, nil)
+	watchFactoryChanges(player)
 end
 
-local function savePlayer(player: Player, releaseLock: boolean?)
-	while savingPlayers[player] do task.wait() end
-	local sessionId = sessionIds[player]
-	if not sessionId or not loadedPlayers[player] then
-		return
-	end
+local function buildSnapshot(player: Player): { [string]: any }?
 	local factoryData = FactoryService.getPersistentState(player)
 	local economyData = EconomyService.getPersistentState(player)
 	if not factoryData or not economyData then
-		return
+		return nil
 	end
-
-	local safeData = SaveSchema.sanitize({
+	return SaveSchema.sanitize({
 		Coins = factoryData.Coins,
 		Layout = factoryData.Layout,
 		Inventory = factoryData.Inventory,
@@ -128,6 +127,17 @@ local function savePlayer(player: Player, releaseLock: boolean?)
 		Statistics = factoryData.Statistics,
 		Analytics = AnalyticsService.snapshot(player),
 	})
+end
+
+local function savePlayer(player: Player, releaseLock: boolean?)
+	-- Snapshot before any yield: on leave, other services tear down per-player state on
+	-- the same PlayerRemoving signal, and a missing piece used to skip the final save.
+	local safeData = buildSnapshot(player)
+	while savingPlayers[player] do task.wait() end
+	local sessionId = sessionIds[player]
+	if not sessionId or not loadedPlayers[player] or not safeData then
+		return
+	end
 	savingPlayers[player] = true
 	local success, errorKind = PersistenceSession.save(store, keyFor(player), sessionId, SaveSchema.toStorage(safeData), releaseLock == true, os.time())
 	savingPlayers[player] = nil
@@ -143,6 +153,23 @@ local function savePlayer(player: Player, releaseLock: boolean?)
 		loadedPlayers[player] = nil
 		sessionIds[player] = nil
 		sessionStartedAt[player] = nil
+	end
+end
+
+watchFactoryChanges = function(player: Player)
+	for _, attribute in ipairs({ "FactoryLayout", "FactoryCapacity" }) do
+		player:GetAttributeChangedSignal(attribute):Connect(function()
+			if pendingChangeSave[player] or not loadedPlayers[player] then
+				return
+			end
+			pendingChangeSave[player] = true
+			task.delay(CHANGE_SAVE_DELAY_SECONDS, function()
+				pendingChangeSave[player] = nil
+				if player.Parent == Players then
+					savePlayer(player, false)
+				end
+			end)
+		end)
 	end
 end
 

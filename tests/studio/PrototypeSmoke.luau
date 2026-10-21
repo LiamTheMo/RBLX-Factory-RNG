@@ -114,6 +114,8 @@ resultEvent.OnServerEvent:Connect(function(player, success, message)
 		for _, machineModel in ipairs(machineFolder:GetChildren()) do
 			assert(not machineModel:FindFirstChild("MachineLabel", true), "placed-machine holograms should be hidden")
 			assert(machineModel:GetAttribute("VisualVariant") and machineModel:FindFirstChild("MachineBadge", true), "machine variants and housing symbols must be visible")
+			local effectLabel = machineModel:FindFirstChild("Effect", true)
+			assert(effectLabel and effectLabel:IsA("TextLabel") and effectLabel.Text ~= "", "placed machines must show what they do")
 			if machineModel:FindFirstChild("DropperHousing", true) then
 				hasDropper = true
 			end
@@ -270,6 +272,7 @@ local success, message = pcall(function()
 	assert(reveal.Heading.Text == expectedHeading, "roll reveal rarity did not match the nested rarity draw")
 	assert(reveal.RevealCard.Text == secondMachine.DisplayName, "roll reveal should name the rolled machine")
 	assert(secondOdds and reveal.Tags.Odds.Text.Text:find(secondOdds, 1, true), "roll reveal omitted machine odds")
+	assert(reveal.Tags.Effect.Text.Text == require(ReplicatedStorage.Shared.MachineEffects).tag(secondMachine), "roll reveal should say what the machine does")
 	assert(stage.PreviewWell.Visible and stage.PreviewWell.MachinePreview:FindFirstChildOfClass("WorldModel"), "roll reveal should show a live machine preview")
 	assert(not overlay.Active and stage.Skip.Visible, "only the stage skip area should take input during the reveal")
 	local textLimit = reveal.RevealCard:FindFirstChildOfClass("UITextSizeConstraint")

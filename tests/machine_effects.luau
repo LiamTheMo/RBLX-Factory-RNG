@@ -1,0 +1,34 @@
+local MachineDefinitions = require("../src/shared/MachineDefinitions")
+local MachineEffects = require("../src/shared/MachineEffects")
+
+local function expect(condition: boolean, message: string)
+	if not condition then
+		error(message, 2)
+	end
+end
+
+local function tag(id: string): string
+	return MachineEffects.tag(assert(MachineDefinitions.get(id), id))
+end
+
+expect(MachineEffects.number(2) == "2" and MachineEffects.number(1.35) == "1.35" and MachineEffects.number(1.1) == "1.1", "numbers drop trailing zeros")
+expect(tag("ValueMultiplier") == "2× All", "global upgraders read as N× All")
+expect(tag("FrostFramer") == "1.35× Ice", "type upgraders name their cube type")
+expect(tag("MossMixer") == "1.25× Nature", "type upgraders use the cube display name")
+expect(tag("FrostPopper") == "Makes Ice", "droppers name the cube they make")
+expect(tag("BasicDropper") == "Makes Standard", "starter dropper is labelled")
+expect(tag("FrostFair") == "Sells 1.4× Ice", "type sellers name their bonus")
+expect(tag("FestivalTreasury") == "Every 5th: 3×", "streak sellers show their cadence")
+expect(tag("LuckyTill") == "12.5%: 1.5× sale", "chance sellers show their odds")
+expect(tag("RainbowExchange") == "Sells 1.5× Epic+", "rarity sellers show the threshold")
+expect(tag("BulkBooth") == "Sells 1.15× 20+", "conditional sellers show the value floor")
+expect(tag("Seller") == "Sells 1×", "the default seller is labelled")
+expect(tag("ConveyorBooster") == "2× Speed", "throughput machines show their speedup")
+expect(tag("LuckyLantern") == "10%: 2× All", "chance upgraders show their odds")
+
+for id, definition in pairs(MachineDefinitions.all()) do
+	local text = MachineEffects.tag(definition)
+	expect(text ~= "" and #text <= 24, `machine {id} needs a short effect tag, got "{text}"`)
+end
+
+print("Machine effect tags passed")
