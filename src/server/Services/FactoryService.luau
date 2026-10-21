@@ -93,6 +93,22 @@ local function getSaleBuffModifiers(player: Player): { [string]: number? }
 	}
 end
 
+-- Plots face the hub: the conveyor runs along the plot axis (tangent to the island ring).
+local function plotFrame(origin: Vector3, plotIndex: number): CFrame
+	local axis = IslandWorldConfig.getPlotAxis(plotIndex)
+	return CFrame.fromMatrix(origin, Vector3.new(axis.X, 0, axis.Z), Vector3.yAxis)
+end
+
+-- Factory geometry is built axis-aligned at the plot origin (the simulation's local +X), then
+-- swung into the plot's orientation here, so the builders stay simple.
+local function alignToPlot(root: Instance, frame: CFrame)
+	local swing = CFrame.new(frame.Position) * frame.Rotation * CFrame.new(-frame.Position)
+	if root:IsA("BasePart") then root.CFrame = swing * root.CFrame end
+	for _, descendant in root:GetDescendants() do
+		if descendant:IsA("BasePart") then descendant.CFrame = swing * descendant.CFrame end
+	end
+end
+
 local function createConveyor(plot: Folder, origin: Vector3): Folder
 	local conveyorConfig = MachineVisualConfig.Conveyor
 	local slotPitch = MachineVisualConfig.SlotPitch
@@ -251,6 +267,7 @@ local function createIslandPlot(player: Player, plotIndex: number): (Folder, Vec
 	base.CanCollide = true
 
 	local conveyor = createConveyor(plot, origin)
+	alignToPlot(plot, plotFrame(origin, plotIndex))
 	return plot, origin, conveyor
 end
 
@@ -290,6 +307,7 @@ local function refreshMachineVisuals(factory: any)
 			local definition = MachineDefinitions.get(machineId)
 			if definition then
 				local model, clickPart, sellerHitbox = MachineModelBuilder.build(machineFolder, factory.origin, slotIndex, definition)
+				alignToPlot(model, factory.frame)
 				if sellerHitbox then factory.sellerHitbox = sellerHitbox end
 				for _, part in ipairs(model:GetChildren()) do
 					if part:IsA("BasePart") and part ~= sellerHitbox then addSlotClickDetector(part, slotIndex) end
@@ -320,7 +338,7 @@ local function updateVisualItems(player: Player, factory: any): boolean
 		activeById[item.Id] = true
 		local visual = factory.visualItems[item.Id]
 		if not visual then
-			visual = createPart(factory.plot, string.format("Item_%d", item.Id), Vector3.new(visualConfig.Size, visualConfig.Size, visualConfig.Size), factory.origin + Vector3.new(0, visualConfig.DropStartHeight + MachineVisualConfig.Conveyor.Elevation, 0), Color3.fromRGB(235, 235, 235))
+			visual = createPart(factory.plot, string.format("Item_%d", item.Id), Vector3.new(visualConfig.Size, visualConfig.Size, visualConfig.Size), factory.frame:PointToWorldSpace(Vector3.new(0, visualConfig.DropStartHeight + MachineVisualConfig.Conveyor.Elevation, 0)), Color3.fromRGB(235, 235, 235))
 			visual:SetAttribute("FactoryItem", true)
 			visual:SetAttribute("OwnerUserId", player.UserId)
 			visual:SetAttribute("ItemId", item.Id)
@@ -345,7 +363,7 @@ local function updateVisualItems(player: Player, factory: any): boolean
 		if visual.Color ~= nextColor then visual.Color = nextColor end
 
 		local x, y = FactoryItemGeometry.itemPosition(factory.layout, item)
-		local nextPosition = factory.origin + Vector3.new(x, y, 0)
+		local nextPosition = factory.frame:PointToWorldSpace(Vector3.new(x, y, 0))
 		if visual.Position ~= nextPosition then visual.Position = nextPosition end
 		local cache = factory.itemPresentationState[item.Id]
 		local sellerModifiers = factory.simulation:getSaleModifiers(item.Id) or (seller and seller.SaleModifiers)
@@ -582,6 +600,9 @@ local function createFactory(player: Player)
 		visualItems = {},
 		announcedSpawn = false,
 		announcedSale = false,
+		-- Where the player is placed on join and after a fall; the island spawn when the map has one.
+		frame = plotFrame(origin, plotIndex),
+		homeCFrame = plotFrame(origin, plotIndex) * CFrame.new(IslandWorldConfig.FactoryCenterOffsetX, 4, 15),
 	}
 	factories[player] = factory
 	local world = workspace:FindFirstChild(IslandWorldConfig.MapKey)
@@ -591,11 +612,12 @@ local function createFactory(player: Player)
 		islandSpawn.Enabled = true
 		player.RespawnLocation = islandSpawn
 		island:SetAttribute("OwnerUserId", player.UserId)
+		factory.homeCFrame = CFrame.new(islandSpawn.Position + Vector3.new(0, 3, 0))
 	end
 	local function placeCharacter(character: Model)
 		local root = character:WaitForChild("HumanoidRootPart", 10)
 		if root and factories[player] == factory and character.Parent then
-			character:PivotTo(CFrame.new(origin + Vector3.new(15, 4, 15)))
+			character:PivotTo(factory.homeCFrame)
 		end
 	end
 	factory.characterConnection = player.CharacterAdded:Connect(placeCharacter)
@@ -763,10 +785,11 @@ function FactoryService.start()
 		for player, factory in pairs(factories) do
 			local character = player.Character
 			local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
-			if root and root:IsA("BasePart") and root.Position.Y < IslandWorldConfig.WaterY - 10 then
+			-- In the lagoon (missed parkour jump, swimming, or falling off the map): return home.
+			if root and root:IsA("BasePart") and root.Position.Y < IslandWorldConfig.FallRecoveryY then
 				root.AssemblyLinearVelocity = Vector3.zero
 				root.AssemblyAngularVelocity = Vector3.zero
-				character:PivotTo(CFrame.new(factory.origin + Vector3.new(15, 4, 15)))
+				character:PivotTo(factory.homeCFrame)
 			end
 			if not dataIsReady(player) then continue end
 			local produced = factory.simulation:step(deltaTime)
