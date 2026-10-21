@@ -767,7 +767,14 @@ end
 
 function Builder.build()
 	local existing=workspace:FindFirstChild(Config.MapKey)
-	if existing then return existing end
+	if existing then
+		-- A map generated at another revision (e.g. a saved Studio preview) has stale plot
+		-- positions, so replace it. A map without the attribute is hand-authored: keep it.
+		local revision=existing:GetAttribute("MapRevision")
+		if type(revision)~="number" or revision==Config.Revision then return existing end
+		warn("[IslandWorldBuilder] replacing stale map revision "..revision.." with "..Config.Revision)
+		existing:Destroy()
+	end
 	local world=Instance.new("Model")
 	world.Name=Config.MapKey
 	world:SetAttribute("MapRevision",Config.Revision)
