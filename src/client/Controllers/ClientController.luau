@@ -4,6 +4,7 @@
 local ClientController = {}
 local started = false
 local BuildController = require(script.Parent.BuildController)
+local CausticsController = require(script.Parent.CausticsController)
 local EconomyController = require(script.Parent.EconomyController)
 local EffectsController = require(script.Parent.EffectsController)
 local CubeHoverController = require(script.Parent.CubeHoverController)
@@ -19,6 +20,7 @@ function ClientController.start()
 	BuildController.start()
 	EconomyController.start()
 	CubeHoverController.start()
+	CausticsController.start()
 end
 
 return ClientController

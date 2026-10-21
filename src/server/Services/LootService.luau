@@ -40,6 +40,10 @@ function LootService.claim(player: Player, part: BasePart): boolean
 		or part.Parent ~= getWorldFolder() or part:GetAttribute("Landed") ~= true or part:GetAttribute("Claimed") == true then
 		return false
 	end
+	-- Islands are linked by parkour, so visitors can reach other plots: drops belong to their plot's owner.
+	if part:GetAttribute("SourcePlotUserId") ~= player.UserId then
+		return false
+	end
 	local booster = BoosterRules.get(part:GetAttribute("BoosterId"))
 	if not booster then return false end
 	part:SetAttribute("Claimed", true)
@@ -116,7 +120,9 @@ local function findLandPosition(factory: any): Vector3?
 	for _ = 1, rayConfig.PositionAttempts do
 		local x = random:NextNumber(bounds.MinX, bounds.MaxX)
 		local z = random:NextNumber(bounds.MinZ, bounds.MaxZ)
-		local rayOrigin = factory.origin + Vector3.new(x, rayConfig.StartHeight, z)
+		-- Spawn bounds are in the plot's own frame (conveyor along local +X), which faces the hub.
+		local rayOrigin = if factory.frame then factory.frame:PointToWorldSpace(Vector3.new(x, rayConfig.StartHeight, z))
+			else factory.origin + Vector3.new(x, rayConfig.StartHeight, z)
 		local result = workspace:Raycast(rayOrigin, Vector3.new(0, -rayConfig.Distance, 0), rayParams)
 		if result and result.Normal.Y >= rayConfig.MinimumGroundNormalY then
 			return result.Position + Vector3.new(0, fallConfig.LandingHeight, 0)
