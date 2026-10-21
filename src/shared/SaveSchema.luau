@@ -164,6 +164,15 @@ function SaveSchema.sanitize(raw: any): { [string]: any }
 		local valid = PlacementRules.validateLayout(candidate, safe.Capacity)
 		if valid then
 			safe.Layout = FactoryLayout.copy(candidate)
+		else
+			-- An unusable saved layout (e.g. one truncated by an old save format) falls back to
+			-- the default route; return its rollable machines to inventory instead of losing them.
+			for _, machineId in pairs(candidate) do
+				local definition = MachineDefinitions.get(machineId)
+				if definition and definition.Rollable then
+					safe.Inventory[machineId] = math.min((safe.Inventory[machineId] or 0) + 1, 1_000)
+				end
+			end
 		end
 	end
 
@@ -182,6 +191,24 @@ function SaveSchema.sanitize(raw: any): { [string]: any }
 	sanitizeCounters(source.Analytics, safe.Analytics)
 
 	return safe
+end
+
+-- Data stores drop array entries after a nil, so an empty slot used to cut the seller
+-- off saved layouts. Stored layouts are always SlotCount strings, with "" for empty.
+function SaveSchema.toStorage(safe: { [string]: any }): { [string]: any }
+	local stored = table.clone(safe)
+	local layout = {}
+	for slotIndex = 1, FactoryLayout.SlotCount do
+		local machineId = safe.Layout and safe.Layout[slotIndex]
+		layout[slotIndex] = if type(machineId) == "string" then machineId else ""
+	end
+	stored.Layout = layout
+	return stored
+end
+
+-- Sanitizer for anything written back to the store (e.g. session acquisition).
+function SaveSchema.sanitizeForStorage(raw: any): { [string]: any }
+	return SaveSchema.toStorage(SaveSchema.sanitize(raw))
 end
 
 return SaveSchema

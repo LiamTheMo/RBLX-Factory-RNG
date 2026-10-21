@@ -74,7 +74,7 @@ local function loadPlayer(player: Player)
 	setLoadStatus(player, false, false, nil)
 
 	local now = os.time()
-	local success, loadedData, errorKind = PersistenceSession.acquire(store, keyFor(player), sessionId, now, SESSION_LOCK_SECONDS, SaveSchema.sanitize)
+	local success, loadedData, errorKind = PersistenceSession.acquire(store, keyFor(player), sessionId, now, SESSION_LOCK_SECONDS, SaveSchema.sanitizeForStorage)
 
 	if not success then
 		sessionIds[player] = nil
@@ -129,7 +129,7 @@ local function savePlayer(player: Player, releaseLock: boolean?)
 		Analytics = AnalyticsService.snapshot(player),
 	})
 	savingPlayers[player] = true
-	local success, errorKind = PersistenceSession.save(store, keyFor(player), sessionId, safeData, releaseLock == true, os.time())
+	local success, errorKind = PersistenceSession.save(store, keyFor(player), sessionId, SaveSchema.toStorage(safeData), releaseLock == true, os.time())
 	savingPlayers[player] = nil
 	if not success then
 		player:SetAttribute("FactoryDataSaveError", if errorKind == "conflict" then "Session ownership changed" else "Data store unavailable")

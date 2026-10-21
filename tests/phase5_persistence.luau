@@ -9,6 +9,38 @@ local function expect(condition: boolean, message: string)
 	end
 end
 
+-- Saved layouts must survive a data store round trip: no nil holes before the seller bay,
+-- and a layout truncated by the old format returns its machines instead of losing them.
+do
+	local placed = SaveSchema.sanitize({
+		Capacity = 3,
+		Inventory = { Giantifier = 1 },
+		Layout = { "BasicDropper", "Giantifier", nil, nil, "Seller" },
+	})
+	expect(placed.Layout[2] == "Giantifier" and placed.Layout[5] == "Seller", "a valid placed layout must be kept")
+	local stored = SaveSchema.toStorage(placed)
+	for slotIndex = 1, FactoryLayout.SlotCount do
+		expect(type(stored.Layout[slotIndex]) == "string", "stored layout must have no nil holes")
+	end
+	expect(stored.Layout[3] == "" and stored.Layout[5] == "Seller", "empty slots store as empty strings")
+	expect(placed.Layout[3] == nil, "toStorage must not change the live layout")
+	local reloaded = SaveSchema.sanitize(stored)
+	for slotIndex = 1, FactoryLayout.SlotCount do
+		expect(reloaded.Layout[slotIndex] == placed.Layout[slotIndex], "stored layout must reload the same placements")
+	end
+	expect(reloaded.Inventory.Giantifier == 1, "a clean reload must not duplicate machines")
+	local truncated = SaveSchema.sanitize({ Capacity = 3, Inventory = {}, Layout = { "BasicDropper", "Giantifier" } })
+	expect(truncated.Layout[5] == FactoryLayout.Default[5], "a truncated layout falls back to the default route")
+	expect(truncated.Inventory.Giantifier == 1, "machines from an unusable layout return to inventory")
+	local acquiredStore = { value = { Data = stored } }
+	function acquiredStore:UpdateAsync(_key: string, transform: (any) -> any): any
+		self.value = transform(self.value)
+		return self.value
+	end
+	local acquiredOk, acquiredLayoutData = PersistenceSession.acquire(acquiredStore, "user", "session-z", 0, 300, SaveSchema.sanitizeForStorage)
+	expect(acquiredOk and acquiredLayoutData.Layout[3] == "" and acquiredLayoutData.Layout[5] == "Seller", "session acquisition must write a hole-free layout back")
+end
+
 local defaultData = SaveSchema.default()
 expect(defaultData.SchemaVersion == SaveSchema.CurrentVersion, "default data must use the current schema")
 expect(defaultData.Capacity == 1, "default capacity should be one")

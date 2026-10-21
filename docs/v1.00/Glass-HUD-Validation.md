@@ -54,6 +54,18 @@ and free rolls still go through the existing validated remotes.
   category chips and description. Rare+ adds rotating light rays, Epic+ sparkles, and
   ultra-rare odds a colored flash and a longer hold. Click skips the spin or dismisses.
 
+## Round 3: floor drops and saved factories
+
+- **Floor drops:** booster drops land as glowing, slightly turned cubes. Their name pill
+  no longer floats over every drop; the client shows it only while the drop is hovered
+  with the mouse or tapped on touch.
+- **Saved factories:** placed layouts previously reset on rejoin whenever a slot before
+  the seller bay was empty, because data stores drop array entries after a `nil`, which cut
+  the seller off the saved layout and failed validation. Layouts are now stored as five
+  strings (`""` for empty) on every save and on session acquisition
+  (`SaveSchema.toStorage` / `sanitizeForStorage`). A saved layout that is still unusable
+  falls back to the default route and returns its rollable machines to inventory.
+
 ## Completed / Passed
 
 - Luau compilation, all pure Luau suites (including the new layout spec across eleven
@@ -82,6 +94,9 @@ and free rolls still go through the existing validated remotes.
   landing feel, result card readability on phones, and frame time with six plots.
 - Font families (`Nunito`, `FredokaOne`) are built-in Roblox fonts; confirm rendering.
 - Audio for roll ticks and reveal is not added; Phase 9 still requires licensed sounds.
+
+- Round 3 live check: place machines with an empty slot before the seller, rejoin, and
+  confirm the layout returns; hover and tap a floor drop to see its label.
 
 ## Incomplete / Needs Work
 
