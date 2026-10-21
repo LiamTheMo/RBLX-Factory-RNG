@@ -4,6 +4,7 @@ local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Feedback = require(Shared.MachineVisualConfig).Feedback
+local Theme = require(Shared.HudTheme)
 
 local FloatingText = {}
 local active: { Part } = {}
@@ -50,10 +51,10 @@ function FloatingText.show(position: Vector3, text: string, color: Color3)
 	label.BackgroundTransparency = 1
 	label.Text = text
 	label.TextColor3 = color
-	label.TextStrokeColor3 = Color3.fromRGB(60, 46, 25)
-	label.TextStrokeTransparency = 0.15
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 20
+	label.TextStrokeColor3 = Theme.Colors.Shadow
+	label.TextStrokeTransparency = 0.35
+	label.Font = Theme.Fonts.Heavy
+	label.TextSize = 21
 	label.Parent = frame
 	local duration = Feedback.SaleDuration
 	TweenService:Create(scale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
