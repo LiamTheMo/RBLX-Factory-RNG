@@ -14,7 +14,7 @@ local started = false
 local SLAT = MachineVisualConfig.Conveyor.Slat
 local STEP_SECONDS = 1 / 30
 
-type Belt = { Part: BasePart, Cleats: { BasePart }, Speed: number }
+type Belt = { Part: BasePart, Cleats: { BasePart }, Speed: number, Spacing: number }
 
 function ConveyorController.start()
 	if started then
@@ -62,7 +62,8 @@ function ConveyorController.start()
 			table.insert(cleats, cleat)
 		end
 		local speed = part:GetAttribute("BeltSpeed")
-		belts[part] = { Part = part, Cleats = cleats, Speed = if type(speed) == "number" then speed else 6 }
+		-- Spread the cleats evenly over the usable length so the loop has no gap.
+		belts[part] = { Part = part, Cleats = cleats, Speed = if type(speed) == "number" then speed else 6, Spacing = usable / count }
 		part.AncestryChanged:Connect(function()
 			if not part:IsDescendantOf(workspace) then
 				removeBelt(part)
@@ -97,10 +98,10 @@ function ConveyorController.start()
 			if (part.Position - focus).Magnitude <= SLAT.AnimateDistance then
 				local half = part.Size.X / 2 - SLAT.Inset
 				local span = half * 2
-				local phase = (now * belt.Speed) % SLAT.Spacing
+				local phase = (now * belt.Speed) % belt.Spacing
 				local top = part.Size.Y / 2 + SLAT.Height / 2
 				for index, cleat in ipairs(belt.Cleats) do
-					local x = ((index - 1) * SLAT.Spacing + phase) % span - half
+					local x = ((index - 1) * belt.Spacing + phase) % span - half
 					table.insert(parts, cleat)
 					table.insert(frames, part.CFrame * CFrame.new(x, top, 0))
 				end

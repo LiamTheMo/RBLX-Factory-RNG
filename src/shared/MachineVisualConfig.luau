@@ -41,7 +41,8 @@ local Visuals = {
 	ConveyorItem = {
 		Size = 1.0,
 		LandingClearance = 0.08,
-		DropStartHeight = 5.8,
+		-- Cubes appear just under the dropper housing, measured from the machine base.
+		DropStartAboveLift = 4.58,
 		DropDurationSeconds = 0.16,
 	},
 	SellerHitbox = { Size = { 2.4, 1.6, 2.1 }, Offset = { 0, 0.9, 0 } },

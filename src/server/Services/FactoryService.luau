@@ -300,7 +300,7 @@ local function updateVisualItems(player: Player, factory: any): boolean
 		activeById[item.Id] = true
 		local visual = factory.visualItems[item.Id]
 		if not visual then
-			visual = createPart(factory.plot, string.format("Item_%d", item.Id), Vector3.new(visualConfig.Size, visualConfig.Size, visualConfig.Size), factory.frame:PointToWorldSpace(Vector3.new(0, visualConfig.DropStartHeight + MachineVisualConfig.Conveyor.Elevation, 0)), Color3.fromRGB(235, 235, 235))
+			visual = createPart(factory.plot, string.format("Item_%d", item.Id), Vector3.new(visualConfig.Size, visualConfig.Size, visualConfig.Size), factory.frame:PointToWorldSpace(Vector3.new(0, FactoryItemGeometry.dropStartY(), 0)), Color3.fromRGB(235, 235, 235))
 			visual.Material = Enum.Material.SmoothPlastic
 			visual:SetAttribute("FactoryItem", true)
 			visual:SetAttribute("OwnerUserId", player.UserId)

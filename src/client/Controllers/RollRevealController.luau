@@ -47,10 +47,11 @@ type CardData = { Id: string, Name: string, Rarity: string, Odds: string, Glyph:
 type CardView = { Frame: Frame, Glyph: TextLabel, Ring: Frame, Name: TextLabel, Odds: TextLabel, Bar: Frame, Stroke: UIStroke, Index: number }
 
 function RollReveal.mount(gui: ScreenGui)
-	local overlay = Instance.new("TextButton")
+	-- The dim layer never takes input; only the stage-sized Skip button does, and only
+	-- while landing or showing the result, so movement controls keep working.
+	local overlay = Instance.new("Frame")
 	overlay.Name = "CutsceneOverlay"
-	overlay.Text = ""
-	overlay.AutoButtonColor = false
+	overlay.Active = false
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.BackgroundColor3 = C.Overlay
 	overlay.BackgroundTransparency = 1
@@ -240,13 +241,16 @@ function RollReveal.mount(gui: ScreenGui)
 	heading.TextXAlignment = Enum.TextXAlignment.Left
 	local previewWell = Instance.new("Frame")
 	previewWell.Name = "PreviewWell"
-	previewWell.Position = UDim2.fromOffset(24, 56)
+	-- Lives beside the CanvasGroup (over its left side) so the ViewportFrame renders directly.
+	previewWell.Position = UDim2.new(0.5, -300 + 24, 0, 92 + 56)
 	previewWell.Size = UDim2.fromOffset(200, 200)
 	previewWell.BackgroundColor3 = C.Stroke
-	previewWell.BackgroundTransparency = 0.94
+	previewWell.BackgroundTransparency = 1
 	previewWell.BorderSizePixel = 0
+	previewWell.Visible = false
+	previewWell.ZIndex = 4
 	GlassUI.corner(previewWell, 16)
-	previewWell.Parent = result
+	previewWell.Parent = stage
 	local viewport = Instance.new("ViewportFrame")
 	viewport.Name = "MachinePreview"
 	viewport.Size = UDim2.fromScale(1, 1)
@@ -254,10 +258,22 @@ function RollReveal.mount(gui: ScreenGui)
 	viewport.Ambient = Color3.fromRGB(205, 212, 224)
 	viewport.LightColor = Color3.fromRGB(255, 244, 225)
 	viewport.LightDirection = Vector3.new(-1, -1, -1)
+	viewport.ImageTransparency = 1
+	viewport.ZIndex = 4
 	viewport.Parent = previewWell
 	local previewGlyph = GlassUI.label(previewWell, "Glyph", "", 72, Theme.Fonts.Heavy)
 	previewGlyph.Size = UDim2.fromScale(1, 1)
 	previewGlyph.TextXAlignment = Enum.TextXAlignment.Center
+	previewGlyph.ZIndex = 5
+	local skip = Instance.new("TextButton")
+	skip.Name = "Skip"
+	skip.Text = ""
+	skip.AutoButtonColor = false
+	skip.BackgroundTransparency = 1
+	skip.Size = UDim2.fromScale(1, 1)
+	skip.Visible = false
+	skip.ZIndex = 10
+	skip.Parent = stage
 	local nameCard = GlassUI.label(result, "RevealCard", "", 40, Theme.Fonts.Heavy)
 	nameCard.Position = UDim2.fromOffset(244, 54)
 	nameCard.Size = UDim2.new(1, -268, 0, 92)
@@ -433,13 +449,19 @@ function RollReveal.mount(gui: ScreenGui)
 		TweenService:Create(overlay, FADE, { BackgroundTransparency = 1 }):Play()
 		TweenService:Create(result, FADE, { GroupTransparency = 1 }):Play()
 		TweenService:Create(reel, FADE, { GroupTransparency = 1 }):Play()
+		TweenService:Create(viewport, FADE, { ImageTransparency = 1 }):Play()
+		TweenService:Create(previewWell, FADE, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(previewGlyph, FADE, { TextTransparency = 1 }):Play()
 		TweenService:Create(blur, FADE, { Size = 0 }):Play()
+		skip.Visible = false
 		task.delay(FADE.Time, function()
 			if token == sequence then
 				overlay.Visible = false
 				blur.Enabled = false
 				rays.Visible = false
 				result.Visible = false
+				previewWell.Visible = false
+				skip.Visible = false
 				hint.Visible = false
 				stopPreview()
 				clearSparkles()
@@ -573,7 +595,14 @@ function RollReveal.mount(gui: ScreenGui)
 		resultScale.Scale = 0.82
 		TweenService:Create(result, FADE, { GroupTransparency = 0 }):Play()
 		TweenService:Create(resultScale, POP, { Scale = 1 }):Play()
+		previewWell.Visible = true
+		previewGlyph.TextTransparency = 1
+		viewport.ImageTransparency = 1
+		TweenService:Create(previewWell, FADE, { BackgroundTransparency = 0.94 }):Play()
+		TweenService:Create(viewport, FADE, { ImageTransparency = 0 }):Play()
+		TweenService:Create(previewGlyph, FADE, { TextTransparency = 0 }):Play()
 		hint.Visible = true
+		skip.Visible = true
 
 		rays.Visible = tier >= 3 or info.Ultra
 		for _, ray in ipairs(rayBars) do
@@ -653,6 +682,8 @@ function RollReveal.mount(gui: ScreenGui)
 		rays.Visible = false
 		result.Visible = false
 		result.GroupTransparency = 1
+		previewWell.Visible = false
+		skip.Visible = false
 		hint.Visible = false
 		marker.Visible = true
 		reel.GroupTransparency = 0
@@ -717,6 +748,7 @@ function RollReveal.mount(gui: ScreenGui)
 			end
 		end
 		phase = "Landing"
+		skip.Visible = true
 	end
 
 	-- Direct reveal without the reel (kept for the ultra-rare test event).
@@ -735,7 +767,7 @@ function RollReveal.mount(gui: ScreenGui)
 		hide(token)
 	end
 
-	overlay.Activated:Connect(function()
+	skip.Activated:Connect(function()
 		if phase == "Landing" then
 			-- Skip ahead to the landing moment.
 			landStart = os.clock() - landDuration
