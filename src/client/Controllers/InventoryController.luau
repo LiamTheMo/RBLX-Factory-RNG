@@ -31,6 +31,7 @@ local InventoryController = {}
 local started = false
 local openPanel: ((string, number?, string?) -> ())? = nil
 local closePanel: (() -> ())? = nil
+local openListeners: { () -> () } = {}
 
 local rarityColors: { [string]: Color3 } = {}
 for _, band in ipairs(EconomyConfig.RarityOddsBands) do
@@ -65,6 +66,11 @@ function InventoryController.close()
 	if closePanel then
 		closePanel()
 	end
+end
+
+-- Lets other HUD panels that share screen space close when the drawer opens.
+function InventoryController.onOpen(listener: () -> ())
+	table.insert(openListeners, listener)
 end
 
 function InventoryController.start()
@@ -663,6 +669,9 @@ function InventoryController.start()
 		activeCategory = if category and categoryTabs[category] then category else "Producer"
 		targetSlot = if nextMode == "Placement" then slotIndex else nil
 		if not panel.Visible then
+			for _, listener in ipairs(openListeners) do
+				task.spawn(listener)
+			end
 			panel.Visible = true
 			panel.Position = panelTarget + UDim2.fromOffset(18, 0)
 			TweenService:Create(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = panelTarget }):Play()

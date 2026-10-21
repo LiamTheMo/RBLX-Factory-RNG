@@ -10,6 +10,7 @@ local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
 local HudLayout = require(Shared:WaitForChild("HudLayout"))
 
 local EffectsController = require(script.Parent.EffectsController)
+local InventoryController = require(script.Parent.InventoryController)
 local GlassUI = require(script.Parent.GlassUI)
 
 local Theme = GlassUI.Theme
@@ -181,8 +182,15 @@ function EconomyController.start()
 	status.Size = UDim2.new(1, 0, 0, 32)
 	status.TextColor3 = C.Muted
 
+	-- The popover and the inventory drawer overlap on most layouts, so only one is open.
 	settings.Activated:Connect(function()
 		panel.Visible = not panel.Visible
+		if panel.Visible then
+			InventoryController.close()
+		end
+	end)
+	InventoryController.onOpen(function()
+		panel.Visible = false
 	end)
 
 	local state: any = nil
@@ -402,6 +410,7 @@ function EconomyController.start()
 		place(settings, metrics.Settings)
 		local popover = metrics.SettingsPanel
 		panelScale.Scale = s
+		capacity.Size = UDim2.new(1, 0, 0, math.max(46, Theme.MinTouch / s))
 		panel.Position = UDim2.fromOffset(popover.X, popover.Y)
 		panel.Size = UDim2.fromOffset(popover.W / s, popover.H / s)
 	end
