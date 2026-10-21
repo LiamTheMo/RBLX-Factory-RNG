@@ -122,8 +122,9 @@ local function createConveyor(plot: Folder, origin: Vector3): Folder
 	local beltBottom = config.DeckCenterY - config.DeckThickness / 2 + config.Elevation
 	local beltMid = (beltTop + beltBottom) / 2
 	local railZ = config.BeltWidth / 2 + config.Rail.Thickness / 2
-	local railBottom = beltBottom - config.Rail.DropBelowBelt
-	local railTop = railBottom + config.Rail.Height
+	local railBottom = 0
+	local railTop = beltTop + config.Rail.TopAboveBelt
+	local railHeight = railTop - railBottom
 	local sellerStartX = (FactoryLayout.SellerSlotIndex - 1) * slotPitch - slotPitch / 2
 
 	local conveyor = Instance.new("Folder")
@@ -146,11 +147,11 @@ local function createConveyor(plot: Folder, origin: Vector3): Folder
 		result.CFrame = CFrame.new(result.Position) * CFrame.Angles(0, math.rad(90), 0)
 	end
 
-	-- Continuous belt between two end drums, with a dark pan underneath for depth.
+	-- Continuous belt between two end drums, resting on a low base on the ground.
 	local belt = piece("ConveyorBelt", Vector3.new(length, beltTop - beltBottom, config.BeltWidth), at(centerX, beltMid, 0), config.BeltColor, Enum.Material.Rubber)
 	belt:SetAttribute("ConveyorBelt", true)
 	belt:SetAttribute("BeltSpeed", slotPitch / FactoryConfig.TravelTimePerSlotSeconds)
-	piece("ConveyorPan", Vector3.new(length - 0.4, 0.12, config.BeltWidth + 0.2), at(centerX, beltBottom - 0.06, 0), config.PanColor, Enum.Material.Metal)
+	piece("ConveyorBase", Vector3.new(length, beltBottom, config.BeltWidth), at(centerX, beltBottom / 2, 0), config.BaseColor, Enum.Material.Metal)
 	drum("ConveyorDrumTail", startX)
 	drum("ConveyorDrumHead", endX)
 
@@ -158,7 +159,7 @@ local function createConveyor(plot: Folder, origin: Vector3): Folder
 	for sideIndex, side in ipairs({ -1, 1 }) do
 		local sideName = sideNames[sideIndex]
 		local z = side * railZ
-		piece("ConveyorRail" .. sideName, Vector3.new(length + 0.3, config.Rail.Height, config.Rail.Thickness),
+		piece("ConveyorRail" .. sideName, Vector3.new(length + 0.3, railHeight, config.Rail.Thickness),
 			at(centerX, (railTop + railBottom) / 2, z), config.Rail.Color, Enum.Material.Metal)
 		piece("ConveyorRailLip" .. sideName, Vector3.new(length + 0.34, 0.1, config.Rail.Thickness + 0.08),
 			at(centerX, railTop + 0.05, z), config.Rail.LipColor, Enum.Material.SmoothPlastic)
@@ -178,23 +179,6 @@ local function createConveyor(plot: Folder, origin: Vector3): Folder
 			bolt.Shape = Enum.PartType.Cylinder
 			bolt.CFrame = CFrame.new(bolt.Position) * CFrame.Angles(0, math.rad(90), 0)
 		end
-	end
-
-	-- Leg pairs with a cross brace: both ends and every second slot boundary.
-	local legXs = { startX + 0.7, endX - 0.7 }
-	for boundary = 2, slotCount - 1, 2 do
-		table.insert(legXs, startX + boundary * slotPitch)
-	end
-	for legIndex, x in ipairs(legXs) do
-		for sideIndex, side in ipairs({ -1, 1 }) do
-			local z = side * railZ
-			piece(string.format("ConveyorLeg_%d_%d", legIndex, sideIndex), Vector3.new(config.Leg.Thickness, railBottom, config.Leg.Thickness),
-				at(x, railBottom / 2, z), config.Leg.Color, Enum.Material.Metal)
-			piece(string.format("ConveyorFoot_%d_%d", legIndex, sideIndex), Vector3.new(config.Leg.FootSize, 0.08, config.Leg.FootSize),
-				at(x, 0.04, z), config.Leg.Color, Enum.Material.Metal)
-		end
-		piece(string.format("ConveyorBrace_%d", legIndex), Vector3.new(config.Leg.Thickness * 0.7, config.Leg.Thickness * 0.7, railZ * 2),
-			at(x, config.Leg.BraceHeight, 0), config.Leg.Color, Enum.Material.Metal)
 	end
 
 	-- One invisible click plate per slot, flush with the belt and below riding cubes.

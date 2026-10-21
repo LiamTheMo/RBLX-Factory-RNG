@@ -16,22 +16,22 @@ local Visuals = {
 	},
 	-- Geometry fields (Elevation, DeckCenterY, DeckThickness, RollerCenterY, RollerDiameter)
 	-- also drive item landing and machine lift in FactoryItemGeometry; the visible belt top
-	-- sits at the roller top so cubes ride on it.
+	-- sits at the roller top so cubes ride on it. The conveyor rests on the ground: a low
+	-- base fills the gap under the belt and the rails start at ground level.
 	Conveyor = {
-		Elevation = 1.5,
+		Elevation = 0,
 		SegmentOverlap = 0.16,
 		BeltWidth = 4.8,
 		DeckThickness = 0.38,
-		DeckCenterY = 1.25,
-		RollerCenterY = 1.56,
+		DeckCenterY = 0.4,
+		RollerCenterY = 0.71,
 		RollerDiameter = 0.22,
 		BeltColor = { 40, 43, 49 },
-		PanColor = { 28, 31, 36 },
+		BaseColor = { 58, 63, 72 },
 		DrumColor = { 156, 165, 176 },
-		Rail = { Height = 1.26, Thickness = 0.3, DropBelowBelt = 0.15, Color = { 188, 197, 207 }, LipColor = { 233, 237, 242 } },
+		Rail = { TopAboveBelt = 0.5, Thickness = 0.3, Color = { 188, 197, 207 }, LipColor = { 233, 237, 242 } },
 		Stripe = { Height = 0.16, Depth = 0.04, Color = { 255, 196, 92 } },
 		Bolt = { Diameter = 0.22, Depth = 0.08, Color = { 92, 99, 110 } },
-		Leg = { Thickness = 0.34, Color = { 74, 80, 90 }, FootSize = 0.8, BraceHeight = 0.9 },
 		-- Client-animated cleats that ride the belt toward the seller at item speed.
 		Slat = { Spacing = 1.25, Length = 0.16, Height = 0.05, Inset = 0.25, Color = { 96, 103, 116 }, AnimateDistance = 160 },
 		-- Invisible click plates on each slot; the client draws the selection box.

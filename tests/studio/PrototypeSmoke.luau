@@ -90,9 +90,13 @@ resultEvent.OnServerEvent:Connect(function(player, success, message)
 	assert(platform and platform:IsA("BasePart") and platform.Size.X >= 36 and platform.Size.Z >= 14, "factory platform should frame the visible conveyor")
 	local belt = conveyor:FindFirstChild("ConveyorBelt")
 	assert(belt and belt:IsA("BasePart") and belt:GetAttribute("ConveyorBelt") == true and belt.Material == Enum.Material.Rubber, "continuous conveyor belt is missing")
-	assert(belt.Size.X >= factoryLayout.SlotCount * machineVisualConfig.SlotPitch and belt.Position.Y >= 2.5, "belt should span every slot above the plot")
+	assert(belt.Size.X >= factoryLayout.SlotCount * machineVisualConfig.SlotPitch, "belt should span every slot")
+	local platformTop = platform.Position.Y + platform.Size.Y / 2
+	local base = conveyor:FindFirstChild("ConveyorBase")
+	assert(base and math.abs((base.Position.Y - base.Size.Y / 2) - platformTop) < 0.05, "conveyor should rest on the ground, not on legs")
+	assert(conveyor:FindFirstChild("ConveyorLeg_1_1", true) == nil, "conveyor should have no stilts")
 	assert(type(belt:GetAttribute("BeltSpeed")) == "number" and belt:GetAttribute("BeltSpeed") > 0, "belt speed drives the client cleats")
-	for _, name in ipairs({ "ConveyorDrumHead", "ConveyorDrumTail", "ConveyorRailLeft", "ConveyorRailRight", "ConveyorPan" }) do
+	for _, name in ipairs({ "ConveyorDrumHead", "ConveyorDrumTail", "ConveyorRailLeft", "ConveyorRailRight" }) do
 		assert(conveyor:FindFirstChild(name), "conveyor part missing: " .. name)
 	end
 	assert(conveyor.ConveyorDrumHead.Shape == Enum.PartType.Cylinder, "conveyor end drums should be cylinders")

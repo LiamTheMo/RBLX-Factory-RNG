@@ -36,11 +36,12 @@ and free rolls still go through the existing validated remotes.
   removed. Each slot has an invisible `SlotSelector_n` click plate flush with the belt,
   and the client draws a translucent selection box: faint and softly pulsing on empty
   slots, amber while hovered or while that slot's placement panel is open.
-- **Conveyor:** one continuous rubber belt between two drums, a dark under-pan, steel
-  side rails with a light lip, an amber safety stripe (coral at the seller bay), rail
-  bolts, and braced leg pairs. Client-only cleats ride every nearby belt toward the
-  seller at item speed (`ConveyorController`, one 30 Hz `BulkMoveTo` loop). Belt height
-  and item/machine geometry are unchanged, and the build uses fewer parts than before.
+- **Conveyor:** one continuous rubber belt between two drums on a low base that rests on
+  the ground (no legs), steel side rails rising from the ground with a light lip, an amber
+  safety stripe (coral at the seller bay) and rail bolts. Client-only cleats ride every
+  nearby belt toward the seller at item speed (`ConveyorController`, one 30 Hz
+  `BulkMoveTo` loop). Items and machines follow the lower belt through the shared
+  geometry, and the build uses fewer parts than before.
 - **Fonts:** every UI string uses `FontFace` from `HudTheme`: Fredoka One for headings
   and numbers, Nunito for text (also on machine badges and booster labels).
 - **Items:** produced cubes use SmoothPlastic; the cube tooltip shows a type dot and
