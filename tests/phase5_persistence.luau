@@ -41,6 +41,19 @@ do
 	expect(acquiredOk and acquiredLayoutData.Layout[3] == "" and acquiredLayoutData.Layout[5] == "Seller", "session acquisition must write a hole-free layout back")
 end
 
+-- Live snapshots carry the current SchemaVersion, so saving never re-runs legacy
+-- migrations; a full route with the default Seller must keep every slot.
+do
+	local full = { "BasicDropper", "ValueMultiplier", "MossMixer", "MossMixer", "Seller" }
+	local live = SaveSchema.sanitize(SaveSchema.liveSnapshot({ Layout = full, Capacity = 3, Inventory = {} }))
+	for slotIndex = 1, FactoryLayout.SlotCount do
+		expect(live.Layout[slotIndex] == full[slotIndex], "a live save must keep slot " .. slotIndex)
+	end
+	expect(live.Inventory.MossMixer == nil, "a live save must not move placed machines back to inventory")
+	local reloaded = SaveSchema.sanitize(SaveSchema.toStorage(live))
+	expect(reloaded.Layout[4] == "MossMixer" and reloaded.Layout[5] == "Seller", "slot 4 must survive a save and reload")
+end
+
 local defaultData = SaveSchema.default()
 expect(defaultData.SchemaVersion == SaveSchema.CurrentVersion, "default data must use the current schema")
 expect(defaultData.Capacity == 1, "default capacity should be one")

@@ -14,6 +14,7 @@ local EconomyRules = require(Shared:WaitForChild("EconomyRules"))
 local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
 local HudLayout = require(Shared:WaitForChild("HudLayout"))
 local ModelBuilder = require(Shared:WaitForChild("MachineModelBuilder"))
+local MachineEffects = require(Shared:WaitForChild("MachineEffects"))
 
 local GlassUI = require(script.Parent.GlassUI)
 
@@ -409,7 +410,10 @@ function InventoryController.start()
 		local rarity = definition and definition.Rarity or "Common"
 		local odds = if definition and definition.Rollable then EconomyRules.getMachineOddsLabel(machineId, MachineDefinitions.getRollPool()) else "Starter"
 		local name = if isPlacement then string.format("Place_%s_%d", machineId, order) else "Owned_" .. machineId
-		local card, well, actions = makeCard(name, order, rarityColor(rarity), definition and definition.DisplayName or machineId, rarity, if odds and odds ~= "Starter" then "Odds " .. odds else "Starter machine", details)
+		-- The chip carries what the machine does (rarity-tinted); rarity and odds share the line below.
+		local effect = if definition then MachineEffects.tag(definition) else rarity
+		local oddsText = if odds and odds ~= "Starter" then `{rarity} · Odds {odds}` else `{rarity} · Starter`
+		local card, well, actions = makeCard(name, order, rarityColor(rarity), definition and definition.DisplayName or machineId, effect, oddsText, details)
 		card:SetAttribute("Description", definition and definition.Description or "")
 		if definition then
 			addPreview(well, definition)

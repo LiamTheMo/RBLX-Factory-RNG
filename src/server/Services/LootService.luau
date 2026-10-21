@@ -6,6 +6,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
 local BoosterRules = require(Shared:WaitForChild("BoosterRules"))
+local IslandWorldConfig = require(Shared:WaitForChild("IslandWorldConfig"))
 local HudTheme = require(Shared:WaitForChild("HudTheme"))
 local FactoryService = require(script.Parent.FactoryService)
 local BoosterService = require(script.Parent.BoosterService)
@@ -41,10 +42,8 @@ function LootService.claim(player: Player, part: BasePart): boolean
 		or part.Parent ~= getWorldFolder() or part:GetAttribute("Landed") ~= true or part:GetAttribute("Claimed") == true then
 		return false
 	end
-	-- Islands are linked by parkour, so visitors can reach other plots: drops belong to their plot's owner.
-	if part:GetAttribute("SourcePlotUserId") ~= player.UserId then
-		return false
-	end
+	-- Drops land anywhere on the map, so any loaded player may collect them; the source
+	-- player only counts toward per-player spawn caps.
 	local booster = BoosterRules.get(part:GetAttribute("BoosterId"))
 	if not booster then return false end
 	part:SetAttribute("Claimed", true)
@@ -127,22 +126,27 @@ local function addDisplay(part: BasePart, booster: any): BillboardGui
 	return billboard
 end
 
-local function findLandPosition(factory: any): Vector3?
-	local bounds = BoosterConfig.SpawnBounds
+-- Random dry-ground point anywhere on the map (uniform over a disc around the hub).
+local function findMapPosition(): Vector3?
+	local map = BoosterConfig.MapSpawn
 	local rayConfig = BoosterConfig.LandRaycast
 	local fallConfig = BoosterConfig.Fall
-	local plotsFolder = workspace:FindFirstChild("TinyFactoryPlots")
-	local exclusions: { Instance } = {}
-	if plotsFolder then
-		table.insert(exclusions, plotsFolder)
+	local minimumY = IslandWorldConfig.Field.WaterlineY + map.MinAboveWater
+	local maximumY = IslandWorldConfig.Field.MaxTopY + map.MaxAboveFieldTop
+	local exclusions: { Instance } = { getWorldFolder() }
+	-- Lagoon rocks sit out in the water where nobody can walk; rays fall through to the
+	-- floor below and are rejected by the waterline check.
+	local world = workspace:FindFirstChild(IslandWorldConfig.MapKey)
+	local rocks = world and world:FindFirstChild("LagoonRocks", true)
+	if rocks then
+		table.insert(exclusions, rocks)
 	end
-	table.insert(exclusions, getWorldFolder())
+	local plotsFolder = workspace:FindFirstChild("TinyFactoryPlots")
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player.Character then
 			table.insert(exclusions, player.Character)
 		end
 	end
-
 	local rayParams = RaycastParams.new()
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
 	rayParams.FilterDescendantsInstances = exclusions
@@ -150,13 +154,15 @@ local function findLandPosition(factory: any): Vector3?
 	rayParams.RespectCanCollide = true
 
 	for _ = 1, rayConfig.PositionAttempts do
-		local x = random:NextNumber(bounds.MinX, bounds.MaxX)
-		local z = random:NextNumber(bounds.MinZ, bounds.MaxZ)
-		-- Spawn bounds are in the plot's own frame (conveyor along local +X), which faces the hub.
-		local rayOrigin = if factory.frame then factory.frame:PointToWorldSpace(Vector3.new(x, rayConfig.StartHeight, z))
-			else factory.origin + Vector3.new(x, rayConfig.StartHeight, z)
+		local distance = map.Radius * math.sqrt(random:NextNumber())
+		local angle = random:NextNumber() * math.pi * 2
+		local rayOrigin = Vector3.new(math.cos(angle) * distance, rayConfig.StartHeight, math.sin(angle) * distance)
 		local result = workspace:Raycast(rayOrigin, Vector3.new(0, -rayConfig.Distance, 0), rayParams)
-		if result and result.Normal.Y >= rayConfig.MinimumGroundNormalY then
+		-- On a plot only the open platform counts, never the conveyor or machines.
+		local onPlot = result ~= nil and plotsFolder ~= nil and result.Instance:IsDescendantOf(plotsFolder)
+		if result and result.Normal.Y >= rayConfig.MinimumGroundNormalY
+			and result.Position.Y >= minimumY and result.Position.Y <= maximumY
+			and (not onPlot or result.Instance.Name == "FactoryPlatform") then
 			return result.Position + Vector3.new(0, fallConfig.LandingHeight, 0)
 		end
 	end
@@ -173,7 +179,7 @@ local function spawnLoot(player: Player)
 	local boosterId = BoosterRules.pickBoosterId(random:NextNumber() * totalWeight)
 	local booster = BoosterRules.get(boosterId)
 	if not booster then return end
-	local landingPosition = findLandPosition(factory)
+	local landingPosition = findMapPosition()
 	if not landingPosition then
 		return
 	end
@@ -225,6 +231,11 @@ local function spawnLoot(player: Player)
 	task.delay(BoosterConfig.DespawnAfterSeconds, function()
 		if part.Parent then part:Destroy() end
 	end)
+end
+
+-- Spawns one drop for the player now (respecting caps); used by the Studio smoke test.
+function LootService.spawnFor(player: Player)
+	spawnLoot(player)
 end
 
 local function removePlayerDrops(player: Player)

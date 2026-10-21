@@ -341,8 +341,11 @@ function EconomyService.start()
 	started = true
 	createRemotes()
 	Players.PlayerRemoving:Connect(function(player)
-		profiles[player] = nil
-		lastRequestAt[player] = nil
+		-- Deferred so DataService's handler on the same signal can still snapshot the profile.
+		task.defer(function()
+			profiles[player] = nil
+			lastRequestAt[player] = nil
+		end)
 	end)
 	for _, player in Players:GetPlayers() do
 		getProfile(player)

@@ -193,6 +193,14 @@ function SaveSchema.sanitize(raw: any): { [string]: any }
 	return safe
 end
 
+-- Live server state is already in the current format: stamp the version so sanitize
+-- never re-runs legacy migrations on it (they would move slot-4 machines to inventory).
+function SaveSchema.liveSnapshot(data: { [string]: any }): { [string]: any }
+	local snapshot = table.clone(data)
+	snapshot.SchemaVersion = SaveSchema.CurrentVersion
+	return snapshot
+end
+
 -- Data stores drop array entries after a nil, so an empty slot used to cut the seller
 -- off saved layouts. Stored layouts are always SlotCount strings, with "" for empty.
 function SaveSchema.toStorage(safe: { [string]: any }): { [string]: any }
