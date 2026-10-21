@@ -88,8 +88,9 @@ function InventoryController.start()
 
 	-- Persistent Inventory button, bottom left.
 	local inventoryButton = GlassUI.button(screenGui, "InventoryButton", "", "Secondary")
+	inventoryButton:SetAttribute("GlassBaseTransparency", Theme.Transparency.Glass)
+	GlassUI.setStyle(inventoryButton, "Secondary")
 	inventoryButton.BackgroundColor3 = C.Glass
-	inventoryButton.BackgroundTransparency = Theme.Transparency.Glass
 	GlassUI.setRadius(inventoryButton, 16)
 	local buttonScale = inventoryButton:FindFirstChildOfClass("UIScale")
 	local boxIcon = GlassUI.icon(inventoryButton, "Box")

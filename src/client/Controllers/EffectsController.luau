@@ -162,13 +162,14 @@ function EffectsController.start()
 	local function showOverlay(accent: Color3)
 		attachBlur()
 		revealStroke.Color = accent
+		-- Always fade in: a new roll can start while the previous reveal is still fading out.
 		if not overlay.Visible then
 			overlay.Visible = true
 			reveal.GroupTransparency = 1
-			blur.Enabled = true
-			TweenService:Create(reveal, FADE, { GroupTransparency = 0 }):Play()
-			TweenService:Create(blur, FADE, { Size = Theme.RevealBlurSize }):Play()
 		end
+		blur.Enabled = true
+		TweenService:Create(reveal, FADE, { GroupTransparency = 0 }):Play()
+		TweenService:Create(blur, FADE, { Size = Theme.RevealBlurSize }):Play()
 		TweenService:Create(overlay, FADE, { BackgroundTransparency = Theme.Transparency.Overlay }):Play()
 	end
 
@@ -235,6 +236,10 @@ function EffectsController.start()
 	toastText.TextColor3 = C.Text
 	toastText.TextTruncate = Enum.TextTruncate.AtEnd
 	toastText.Parent = toastContent
+	-- Cap the label inside the 520px pill so long reasons truncate instead of clipping.
+	local toastTextLimit = Instance.new("UISizeConstraint")
+	toastTextLimit.MaxSize = Vector2.new(470, 46)
+	toastTextLimit.Parent = toastText
 
 	local function placeToast()
 		toast.Position = UDim2.new(0.5, 0, 0, GuiService.TopbarInset.Max.Y + 10)

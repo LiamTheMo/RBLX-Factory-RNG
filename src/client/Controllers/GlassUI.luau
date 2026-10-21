@@ -15,6 +15,9 @@ local FAST = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out
 
 export type ButtonStyle = "Primary" | "Secondary" | "Ghost" | "Danger" | "Selected"
 
+-- Running hover tweens, cancelled by setStyle so a restyle mid-hover always wins.
+local hoverTweens: { [GuiButton]: Tween } = setmetatable({}, { __mode = "k" }) :: any
+
 local STYLES: { [string]: { Color: Color3, Transparency: number, Text: Color3, Stroke: number } } = {
 	Primary = { Color = C.Accent, Transparency = 0.12, Text = C.AccentText, Stroke = 0.6 },
 	Secondary = { Color = C.CardTop, Transparency = 0.25, Text = C.Text, Stroke = T.Stroke },
@@ -114,12 +117,28 @@ function GlassUI.label(parent: Instance, name: string, text: string, size: numbe
 	return label
 end
 
+-- Resting transparency: the style's, unless the button sets a GlassBaseTransparency override.
+local function restingTransparency(button: GuiButton): number
+	local spec = STYLES[(button:GetAttribute("GlassStyle") or "Secondary") :: string]
+	local override = button:GetAttribute("GlassBaseTransparency")
+	local base = if type(override) == "number" then override else spec.Transparency
+	if button:GetAttribute("GlassDisabled") == true then
+		return math.max(base, T.Disabled)
+	end
+	return base
+end
+
 function GlassUI.setStyle(button: GuiButton, style: ButtonStyle)
 	local spec = STYLES[style]
+	local hover = hoverTweens[button]
+	if hover then
+		hover:Cancel()
+		hoverTweens[button] = nil
+	end
 	button:SetAttribute("GlassStyle", style)
 	button.BackgroundColor3 = spec.Color
 	local enabled = button:GetAttribute("GlassDisabled") ~= true
-	button.BackgroundTransparency = if enabled then spec.Transparency else math.max(spec.Transparency, T.Disabled)
+	button.BackgroundTransparency = restingTransparency(button)
 	if button:IsA("TextButton") then
 		button.TextColor3 = spec.Text
 		button.TextTransparency = if enabled then 0 else 0.45
@@ -140,20 +159,27 @@ end
 local function attachFeedback(button: GuiButton)
 	local scale = Instance.new("UIScale")
 	scale.Parent = button
-	local function base(): number
-		local spec = STYLES[(button:GetAttribute("GlassStyle") or "Secondary") :: string]
-		if button:GetAttribute("GlassDisabled") == true then
-			return math.max(spec.Transparency, T.Disabled)
+	local function fadeTo(transparency: number)
+		local previous = hoverTweens[button]
+		if previous then
+			previous:Cancel()
 		end
-		return spec.Transparency
+		local tween = TweenService:Create(button, FAST, { BackgroundTransparency = transparency })
+		hoverTweens[button] = tween
+		tween.Completed:Connect(function()
+			if hoverTweens[button] == tween then
+				hoverTweens[button] = nil
+			end
+		end)
+		tween:Play()
 	end
 	button.MouseEnter:Connect(function()
 		if button:GetAttribute("GlassDisabled") ~= true then
-			TweenService:Create(button, FAST, { BackgroundTransparency = math.max(0, base() - 0.12) }):Play()
+			fadeTo(math.max(0, restingTransparency(button) - 0.12))
 		end
 	end)
 	button.MouseLeave:Connect(function()
-		TweenService:Create(button, FAST, { BackgroundTransparency = base() }):Play()
+		fadeTo(restingTransparency(button))
 		TweenService:Create(scale, FAST, { Scale = 1 }):Play()
 	end)
 	button.InputBegan:Connect(function(input: InputObject)

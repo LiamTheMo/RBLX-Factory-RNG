@@ -23,6 +23,9 @@ rebuilt as a code-only, semi-transparent glass interface:
 | Toasts | below the Roblox top bar | Glass pill with colored accent dot |
 | Cube tooltip, sale popups, booster labels | world | Restyled to the same palette |
 
+The inventory drawer now starts closed on join so the Roll button is the first call to
+action; it opens from the Inventory button or by clicking a conveyor area.
+
 Server authority is unchanged: placement, move, return, recycle, booster use, capacity
 and free rolls still go through the existing validated remotes.
 

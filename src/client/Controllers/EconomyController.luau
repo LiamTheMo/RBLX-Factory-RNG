@@ -133,8 +133,9 @@ function EconomyController.start()
 
 	-- Settings button and its popover, top right.
 	local settings = GlassUI.button(settingsGui, "Settings", "", "Secondary")
+	settings:SetAttribute("GlassBaseTransparency", Theme.Transparency.Glass)
+	GlassUI.setStyle(settings, "Secondary")
 	settings.BackgroundColor3 = C.Glass
-	settings.BackgroundTransparency = Theme.Transparency.Glass
 	GlassUI.setRadius(settings, 14)
 	local settingsIcon = GlassUI.icon(settings, "Sliders")
 	settingsIcon.AnchorPoint = Vector2.new(0.5, 0.5)
