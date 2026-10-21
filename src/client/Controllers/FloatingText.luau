@@ -5,6 +5,7 @@ local Debris = game:GetService("Debris")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Feedback = require(Shared.MachineVisualConfig).Feedback
 local Theme = require(Shared.HudTheme)
+local GlassUI = require(script.Parent.GlassUI)
 
 local FloatingText = {}
 local active: { Part } = {}
@@ -35,7 +36,7 @@ function FloatingText.show(position: Vector3, text: string, color: Color3)
 	popup.AlwaysOnTop = true
 	popup.MaxDistance = Feedback.HoverDistance
 	popup.Parent = marker
-	local frame = Instance.new("Frame")
+	local frame = Instance.new("CanvasGroup")
 	frame.Size = UDim2.fromScale(1, 1)
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.Position = UDim2.fromScale(0.5, 0.5)
@@ -47,15 +48,28 @@ function FloatingText.show(position: Vector3, text: string, color: Color3)
 	scale.Parent = frame
 	local label = Instance.new("TextLabel")
 	label.Name = "Amount"
-	label.Size = UDim2.fromScale(1, 1)
+	label.LayoutOrder = 2
+	label.AutomaticSize = Enum.AutomaticSize.X
+	label.Size = UDim2.fromScale(0, 1)
 	label.BackgroundTransparency = 1
 	label.Text = text
 	label.TextColor3 = color
 	label.TextStrokeColor3 = Theme.Colors.Shadow
 	label.TextStrokeTransparency = 0.35
-	label.Font = Theme.Fonts.Heavy
-	label.TextSize = 21
+	label.FontFace = Theme.Fonts.Heavy
+	label.TextSize = 24
 	label.Parent = frame
+	-- Coin icon beside the amount; the CanvasGroup fades both together.
+	local row = Instance.new("UIListLayout")
+	row.FillDirection = Enum.FillDirection.Horizontal
+	row.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	row.VerticalAlignment = Enum.VerticalAlignment.Center
+	row.Padding = UDim.new(0, 6)
+	row.SortOrder = Enum.SortOrder.LayoutOrder
+	row.Parent = frame
+	local coin = GlassUI.icon(frame, "Coin")
+	coin.LayoutOrder = 1
+	coin.Size = UDim2.fromOffset(24, 24)
 	local duration = Feedback.SaleDuration
 	TweenService:Create(scale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 	TweenService:Create(frame, TweenInfo.new(0.3), { Rotation = 0 }):Play()
@@ -63,7 +77,7 @@ function FloatingText.show(position: Vector3, text: string, color: Color3)
 		{ StudsOffsetWorldSpace = Vector3.new(if sequence % 2 == 0 then 0.35 else -0.35, 2.8, 0) }):Play()
 	task.delay(duration * 0.45, function()
 		if marker.Parent then
-			TweenService:Create(label, TweenInfo.new(duration * 0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+			TweenService:Create(frame, TweenInfo.new(duration * 0.5), { GroupTransparency = 1 }):Play()
 		end
 	end)
 	Debris:AddItem(marker, duration + 0.1)

@@ -85,24 +85,24 @@ resultEvent.OnServerEvent:Connect(function(player, success, message)
 	local conveyor = factory.conveyor
 	assert(conveyor and conveyor.Parent == factory.plot, "visible conveyor assembly is missing from the player's plot")
 	assert(conveyor:GetAttribute("SlotCount") == factoryLayout.SlotCount, "conveyor slot count should come from shared layout data")
-	assert(conveyor:FindFirstChild("Conveyor_6") == nil, "prototype conveyor should not create an unexpected sixth area")
+	assert(conveyor:FindFirstChild("SlotSelector_6") == nil, "prototype conveyor should not create an unexpected sixth area")
 	local platform = factory.plot:FindFirstChild("FactoryPlatform")
 	assert(platform and platform:IsA("BasePart") and platform.Size.X >= 36 and platform.Size.Z >= 14, "factory platform should frame the visible conveyor")
-	local underframe = conveyor:FindFirstChild("ConveyorUnderframe")
-	assert(underframe and underframe:IsA("BasePart"), "raised conveyor underframe is missing")
+	local belt = conveyor:FindFirstChild("ConveyorBelt")
+	assert(belt and belt:IsA("BasePart") and belt:GetAttribute("ConveyorBelt") == true and belt.Material == Enum.Material.Rubber, "continuous conveyor belt is missing")
+	assert(belt.Size.X >= factoryLayout.SlotCount * machineVisualConfig.SlotPitch and belt.Position.Y >= 2.5, "belt should span every slot above the plot")
+	assert(type(belt:GetAttribute("BeltSpeed")) == "number" and belt:GetAttribute("BeltSpeed") > 0, "belt speed drives the client cleats")
+	for _, name in ipairs({ "ConveyorDrumHead", "ConveyorDrumTail", "ConveyorRailLeft", "ConveyorRailRight", "ConveyorPan" }) do
+		assert(conveyor:FindFirstChild(name), "conveyor part missing: " .. name)
+	end
+	assert(conveyor.ConveyorDrumHead.Shape == Enum.PartType.Cylinder, "conveyor end drums should be cylinders")
+	assert(conveyor:FindFirstChildWhichIsA("BillboardGui", true) == nil, "conveyor slots should not show text labels")
 	for slotIndex = 1, factoryLayout.SlotCount do
-		local belt = conveyor:FindFirstChild("Conveyor_" .. slotIndex)
-		local clickDetector = belt and belt:FindFirstChild("FactorySlotClick")
-		assert(belt and belt:IsA("BasePart") and belt.Size.X >= machineVisualConfig.SlotPitch and belt.Size.Z >= 4.5, "conveyor slot should be wide and form a continuous belt segment")
-		assert(belt.Position.Y >= 2.5 and belt.Material == Enum.Material.Rubber, "raised conveyor belt surface is missing")
+		local selector = conveyor:FindFirstChild("SlotSelector_" .. slotIndex)
+		local clickDetector = selector and selector:FindFirstChild("FactorySlotClick")
+		assert(selector and selector:IsA("BasePart") and selector.Transparency == 1 and selector.CanQuery, "slot click plate is missing")
+		assert(selector.Size.X >= machineVisualConfig.SlotPitch - 0.5 and selector.Size.Z >= 4.8, "slot click plate should cover the belt")
 		assert(clickDetector and clickDetector:IsA("ClickDetector") and clickDetector.MaxActivationDistance > 0, "factory area is not clickable")
-		local roller = conveyor:FindFirstChild("ConveyorRoller_" .. slotIndex .. "_1")
-		assert(roller and roller:IsA("BasePart") and roller.Shape == Enum.PartType.Cylinder, "visible cylindrical conveyor rollers are missing")
-		local guide = conveyor:FindFirstChild("ConveyorGuide_" .. slotIndex .. "_1")
-		assert(guide and guide:IsA("BasePart") and guide.Size.Y >= 0.8, "raised conveyor guard rails are missing")
-		local areaLabel = belt:FindFirstChild("ConveyorAreaLabel_" .. slotIndex)
-		local areaText = areaLabel and areaLabel:FindFirstChild("Label")
-		assert(areaText and areaText:IsA("TextLabel") and areaText.Text == factoryLayout.getAreaLabel(slotIndex) and areaText.TextSize >= 16, "conveyor placement area label is not visible")
 	end
 	local machineFolder = factory.plot:FindFirstChild("Machines")
 	local hasDropper = false
@@ -190,13 +190,14 @@ local success, message = pcall(function()
 	assert(cube and hover.focusItem(cube), "a cube must be inspectable")
 	local tooltip = player.PlayerGui.CubeValueHover
 	assert(tooltip.Enabled and tooltip.Adornee == cube and tooltip.Frame.Value.Text:find("Coins", 1, true), "hover value label is missing")
-	assert(tooltip.Frame.Modifiers.Text:find("chain ×", 1, true) and tooltip.Frame.Modifiers.Text:find("sale ×", 1, true), "hover must show upgrade and sale multipliers")
+	assert(tooltip.Frame.Chain.Text.Text:find("chain ×", 1, true) and tooltip.Frame.Modifiers.Text:find("Sale ×", 1, true), "hover must show upgrade and sale multipliers")
+	assert(tooltip.Frame.CubeType.Text:find("cube", 1, true), "hover must name the cube type")
 	local effects = require(player.PlayerScripts.Client.Controllers.EffectsController)
 	effects.play("ItemSold", { Coins = 1234, Position = cube.Position })
 	local popup = nil
 	for _, child in ipairs(workspace:GetChildren()) do
 		local amount = child:FindFirstChild("Amount", true)
-		if child.Name == "SalePopup" and amount and amount.Text:find("+1.23k Coins", 1, true) then popup = child; break end
+		if child.Name == "SalePopup" and amount and amount.Text == "+1.23k" then popup = child; break end
 	end
 	assert(popup, "confirmed sales must display formatted floating currency")
 	task.wait(0.3)
@@ -224,6 +225,7 @@ local success, message = pcall(function()
 	local inventoryList = inventoryHud.MachinePanel:WaitForChild("MachineList")
 	local inventoryRow = inventoryList:WaitForChild("Owned_" .. first.LastRoll, 2)
 	assert(inventoryRow and inventoryRow:IsA("Frame"), "rolled machine missing from owned inventory")
+	assert(not inventoryRow:FindFirstChild("PlaceButton", true), "placement happens on the conveyor, not from inventory cards")
 	local machineDetails = inventoryRow:FindFirstChild("RollOdds") :: TextLabel?
 	assert(firstOdds and machineDetails and machineDetails.Text:find(firstOdds, 1, true), "inventory row omitted machine odds")
 	local blocked = roll:InvokeServer()
@@ -241,37 +243,35 @@ local success, message = pcall(function()
 	effects.play("MachineRolled", { MachineId = second.LastRoll, Rarity = second.LastRarity, LuckMultiplier = second.LastRollLuckMultiplier })
 	local overlay = player.PlayerGui.FactoryEffects.CutsceneOverlay
 	assert(overlay.Visible, "roll cutscene did not open")
-	task.wait(0.12)
-	local reveal = overlay.RevealPanel
-	local rollingText = reveal.RevealCard.Text
-	task.wait(0.15)
+	task.wait(0.3)
 	assert(overlay.BackgroundColor3 == theme.Colors.Overlay and math.abs(overlay.BackgroundTransparency - theme.Transparency.Overlay) < 0.05, "roll should dim the screen with the glass overlay")
-	assert(reveal:IsA("CanvasGroup") and reveal.BackgroundTransparency > 0, "roll result should sit on a semi-transparent glass panel")
-	assert(reveal.Heading.BackgroundTransparency == 1, "roll heading should be text without a backing fill")
-	assert(reveal.RevealCard.BackgroundTransparency == 1, "rolling result text should not add its own fill")
-	assert(not reveal.RevealCard:FindFirstChildOfClass("UIStroke"), "rolling result text should not have a box outline")
-	assert(rollingText:find("1/", 1, true) and rollingText:find("·", 1, true), "roll animation should show odds on one line")
-	for _, band in ipairs(require(ReplicatedStorage.Shared.EconomyConfig).RarityOddsBands) do
-		assert(not rollingText:find(band.Name, 1, true), "rarity should stay in the heading, not the result line")
+	local stage = overlay.Stage
+	local reel = stage.Reel
+	assert(reel:IsA("CanvasGroup") and reel.GroupTransparency < 0.05 and stage.Marker.Visible, "the reel and its marker should show while spinning")
+	local oddsCard = nil
+	for _, child in ipairs(reel:GetChildren()) do
+		if child.Name:sub(1, 8) == "ReelCard" and child.RollOdds.Text:find("1/", 1, true) then oddsCard = child; break end
 	end
+	assert(oddsCard, "reel cards should show machine odds")
 	local secondMachine = definition.get(second.LastRoll)
 	assert(secondMachine and second.LastRollLuckMultiplier == 2, "second roll did not use active Luck")
 	local activeRollPool = economyRules.getLuckAdjustedRollPool(definition.getRollPool(), second.LastRollLuckMultiplier)
 	local secondRarity = economyRules.getMachineRarity(secondMachine.Id, activeRollPool)
 	local secondOdds = economyRules.getMachineOddsLabel(secondMachine.Id, activeRollPool)
-	task.wait(1.55)
+	task.wait(3.4)
+	local reveal = stage.RevealPanel
+	assert(reveal.Visible and reveal:IsA("CanvasGroup") and reveal.GroupTransparency < 0.05, "result card should replace the reel after landing")
 	assert(reveal.Heading.Text == string.upper(secondRarity) .. " MACHINE!", "roll reveal rarity did not match the nested rarity draw")
-	assert(secondOdds and reveal.RevealCard.Text:find(secondOdds, 1, true), "roll reveal omitted machine odds")
-	assert(not reveal.RevealCard.Text:find(secondRarity, 1, true), "roll result should not repeat rarity by the heading")
-	assert(reveal.RevealCard.TextWrapped == true, "large roll reveal text should wrap when needed")
+	assert(reveal.RevealCard.Text == secondMachine.DisplayName, "roll reveal should name the rolled machine")
+	assert(secondOdds and reveal.Tags.Odds.Text.Text:find(secondOdds, 1, true), "roll reveal omitted machine odds")
+	assert(reveal.PreviewWell.MachinePreview:FindFirstChildOfClass("WorldModel"), "roll reveal should show a live machine preview")
 	local textLimit = reveal.RevealCard:FindFirstChildOfClass("UITextSizeConstraint")
-	assert(textLimit and textLimit.MinTextSize >= 22 and textLimit.MaxTextSize >= 48, "roll reveal text should use a large readable type scale")
+	assert(reveal.RevealCard.TextWrapped and textLimit and textLimit.MinTextSize >= 22 and textLimit.MaxTextSize >= 48, "roll reveal text should use a large readable type scale")
 	effects.play("UltraRareRollCutscene", { MachineName = "Test Machine", Rarity = "Legendary", Odds = "1/10001" })
-	task.wait(0.1)
+	task.wait(0.4)
 	assert(overlay.Visible and reveal.Heading.Text == "ULTRA RARE MACHINE!", "ultra-rare cutscene test event did not open")
 	assert(math.abs(overlay.BackgroundTransparency - theme.Transparency.Overlay) < 0.05, "ultra-rare roll reveal should keep the dim overlay")
-	assert(reveal.RevealCard.BackgroundTransparency == 1, "ultra-rare reveal should keep its text background clear")
-	assert(reveal.RevealCard.Text:find("1/10001", 1, true), "ultra-rare cutscene omitted test odds")
+	assert(stage.Rays.Visible and reveal.Tags.Odds.Text.Text:find("1/10001", 1, true), "ultra-rare cutscene should show rays and the test odds")
 	task.wait(0.15)
 	local toast = player.PlayerGui.FactoryEffects:FindFirstChild("EventToast")
 	assert(not toast or not toast:FindFirstChild("Message", true).Text:find("Added to inventory", 1, true), "roll completion should not show an added-to-inventory toast")

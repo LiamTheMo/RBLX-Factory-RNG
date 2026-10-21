@@ -4,6 +4,7 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Visuals = require(Shared.MachineVisualConfig)
 local Geometry = require(Shared.FactoryItemGeometry)
 local CubeTypeDefinitions = require(Shared.CubeTypeDefinitions)
+local Theme = require(Shared.HudTheme)
 local Builder = {}
 
 local function rgb(channels: { number }): Color3
@@ -93,7 +94,7 @@ function Builder.build(parent: Instance, origin: Vector3, slot: number, definiti
 		icon.TextColor3 = accent
 		icon.TextStrokeColor3 = Color3.fromRGB(35, 38, 42)
 		icon.TextStrokeTransparency = 0.25
-		icon.Font = Enum.Font.GothamBlack
+		icon.FontFace = Theme.Fonts.Heavy
 		icon.TextSize = 56
 		icon.Parent = badge
 	end

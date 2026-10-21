@@ -110,124 +110,102 @@ local function alignToPlot(root: Instance, frame: CFrame)
 end
 
 local function createConveyor(plot: Folder, origin: Vector3): Folder
-	local conveyorConfig = MachineVisualConfig.Conveyor
+	local config = MachineVisualConfig.Conveyor
 	local slotPitch = MachineVisualConfig.SlotPitch
 	local slotCount = FactoryLayout.SlotCount
-	local segmentLength = slotPitch + conveyorConfig.SegmentOverlap
-	local totalLength = (slotCount - 1) * slotPitch + segmentLength
-	local centerOffsetX = (slotCount - 1) * slotPitch / 2
-	local deckTop = conveyorConfig.DeckCenterY + conveyorConfig.DeckThickness / 2 + conveyorConfig.Elevation
+	local segmentLength = slotPitch + config.SegmentOverlap
+	local startX = -segmentLength / 2
+	local endX = (slotCount - 1) * slotPitch + segmentLength / 2
+	local length = endX - startX
+	local centerX = (startX + endX) / 2
+	local beltTop = config.RollerCenterY + config.RollerDiameter / 2 + config.Elevation
+	local beltBottom = config.DeckCenterY - config.DeckThickness / 2 + config.Elevation
+	local beltMid = (beltTop + beltBottom) / 2
+	local railZ = config.BeltWidth / 2 + config.Rail.Thickness / 2
+	local railBottom = beltBottom - config.Rail.DropBelowBelt
+	local railTop = railBottom + config.Rail.Height
+	local sellerStartX = (FactoryLayout.SellerSlotIndex - 1) * slotPitch - slotPitch / 2
 
 	local conveyor = Instance.new("Folder")
 	conveyor.Name = "Conveyor"
 	conveyor.Parent = plot
 	conveyor:SetAttribute("SlotCount", slotCount)
 
-	local underframe = createPart(
-		conveyor,
-		"ConveyorUnderframe",
-		Vector3.new(
-			totalLength + conveyorConfig.FrameLengthPadding,
-			conveyorConfig.FrameHeight,
-			conveyorConfig.BeltWidth + conveyorConfig.FrameWidthPadding
-		),
-		origin + Vector3.new(centerOffsetX, conveyorConfig.FrameCenterY + conveyorConfig.Elevation, 0),
-		colorFromRgb(conveyorConfig.FrameColor)
-	)
-	underframe.Material = Enum.Material.Metal
+	local function at(x: number, y: number, z: number): Vector3
+		return origin + Vector3.new(x, y, z)
+	end
+	local function piece(name: string, size: Vector3, position: Vector3, color: { number }, material: Enum.Material): Part
+		local result = createPart(conveyor, name, size, position, colorFromRgb(color))
+		result.Material = material
+		return result
+	end
+	local function drum(name: string, x: number)
+		local diameter = beltTop - beltBottom + 0.12
+		local result = piece(name, Vector3.new(config.BeltWidth + 0.1, diameter, diameter), at(x, beltMid, 0), config.DrumColor, Enum.Material.Metal)
+		result.Shape = Enum.PartType.Cylinder
+		result.CFrame = CFrame.new(result.Position) * CFrame.Angles(0, math.rad(90), 0)
+	end
 
-	for slotIndex = 1, slotCount do
-		local offset = (slotIndex - 1) * slotPitch
-		local isSellerBay = slotIndex == FactoryLayout.SellerSlotIndex
-		local belt = createPart(
-			conveyor,
-			string.format("Conveyor_%d", slotIndex),
-			Vector3.new(segmentLength, conveyorConfig.DeckThickness, conveyorConfig.BeltWidth),
-			origin + Vector3.new(offset, conveyorConfig.DeckCenterY + conveyorConfig.Elevation, 0),
-			colorFromRgb(if isSellerBay then conveyorConfig.SellerBay.DeckColor else conveyorConfig.DeckColor)
-		)
-		belt.Material = Enum.Material.Rubber
-		addSlotClickDetector(belt, slotIndex)
+	-- Continuous belt between two end drums, with a dark pan underneath for depth.
+	local belt = piece("ConveyorBelt", Vector3.new(length, beltTop - beltBottom, config.BeltWidth), at(centerX, beltMid, 0), config.BeltColor, Enum.Material.Rubber)
+	belt:SetAttribute("ConveyorBelt", true)
+	belt:SetAttribute("BeltSpeed", slotPitch / FactoryConfig.TravelTimePerSlotSeconds)
+	piece("ConveyorPan", Vector3.new(length - 0.4, 0.12, config.BeltWidth + 0.2), at(centerX, beltBottom - 0.06, 0), config.PanColor, Enum.Material.Metal)
+	drum("ConveyorDrumTail", startX)
+	drum("ConveyorDrumHead", endX)
 
-		for rollerIndex = 1, conveyorConfig.RollerCountPerSlot do
-			local rollerOffset = -slotPitch / 2 + ((rollerIndex - 0.5) * slotPitch / conveyorConfig.RollerCountPerSlot)
-			local rollerPosition = origin + Vector3.new(offset + rollerOffset, conveyorConfig.RollerCenterY + conveyorConfig.Elevation, 0)
-			local roller = createPart(
-				conveyor,
-				string.format("ConveyorRoller_%d_%d", slotIndex, rollerIndex),
-				Vector3.new(
-					conveyorConfig.BeltWidth + conveyorConfig.RollerOverhang,
-					conveyorConfig.RollerDiameter,
-					conveyorConfig.RollerDiameter
-				),
-				rollerPosition,
-				colorFromRgb(conveyorConfig.RollerColor)
-			)
-			roller.Shape = Enum.PartType.Cylinder
-			roller.CFrame = CFrame.new(rollerPosition) * CFrame.Angles(0, math.rad(90), 0)
-			roller.Material = Enum.Material.Metal
-			addSlotClickDetector(roller, slotIndex)
+	local sideNames = { "Left", "Right" }
+	for sideIndex, side in ipairs({ -1, 1 }) do
+		local sideName = sideNames[sideIndex]
+		local z = side * railZ
+		piece("ConveyorRail" .. sideName, Vector3.new(length + 0.3, config.Rail.Height, config.Rail.Thickness),
+			at(centerX, (railTop + railBottom) / 2, z), config.Rail.Color, Enum.Material.Metal)
+		piece("ConveyorRailLip" .. sideName, Vector3.new(length + 0.34, 0.1, config.Rail.Thickness + 0.08),
+			at(centerX, railTop + 0.05, z), config.Rail.LipColor, Enum.Material.SmoothPlastic)
+		-- Safety stripe on the outer face; the seller bay section uses its own color.
+		local stripeY = railTop - 0.32
+		local stripeZ = z + side * (config.Rail.Thickness / 2 + config.Stripe.Depth / 2)
+		local routeLength = sellerStartX - startX
+		piece("ConveyorStripe" .. sideName, Vector3.new(routeLength, config.Stripe.Height, config.Stripe.Depth),
+			at(startX + routeLength / 2, stripeY, stripeZ), config.Stripe.Color, Enum.Material.SmoothPlastic)
+		piece("ConveyorSellerStripe" .. sideName, Vector3.new(endX - sellerStartX, config.Stripe.Height, config.Stripe.Depth),
+			at((sellerStartX + endX) / 2, stripeY, stripeZ), config.SellerBay.StripeColor, Enum.Material.SmoothPlastic)
+		for boundary = 0, slotCount do
+			local bolt = piece(string.format("ConveyorBolt%s_%d", sideName, boundary), Vector3.new(config.Bolt.Depth, config.Bolt.Diameter, config.Bolt.Diameter),
+				at(startX + boundary * slotPitch + (if boundary == 0 then 0.35 elseif boundary == slotCount then -0.35 else 0), railBottom + 0.3,
+					z + side * (config.Rail.Thickness / 2 + config.Bolt.Depth / 2)),
+				config.Bolt.Color, Enum.Material.Metal)
+			bolt.Shape = Enum.PartType.Cylinder
+			bolt.CFrame = CFrame.new(bolt.Position) * CFrame.Angles(0, math.rad(90), 0)
 		end
+	end
 
+	-- Leg pairs with a cross brace: both ends and every second slot boundary.
+	local legXs = { startX + 0.7, endX - 0.7 }
+	for boundary = 2, slotCount - 1, 2 do
+		table.insert(legXs, startX + boundary * slotPitch)
+	end
+	for legIndex, x in ipairs(legXs) do
 		for sideIndex, side in ipairs({ -1, 1 }) do
-			local guideOffset = side * (conveyorConfig.BeltWidth / 2 + conveyorConfig.GuideThickness / 2)
-			local guidePosition = origin + Vector3.new(offset, deckTop + conveyorConfig.GuideHeight / 2, guideOffset)
-			local guide = createPart(
-				conveyor,
-				string.format("ConveyorGuide_%d_%d", slotIndex, sideIndex),
-				Vector3.new(segmentLength, conveyorConfig.GuideHeight, conveyorConfig.GuideThickness),
-				guidePosition,
-				colorFromRgb(conveyorConfig.GuideColor)
-			)
-			guide.Material = Enum.Material.Metal
-			addSlotClickDetector(guide, slotIndex)
-
-			local accent = createPart(
-				conveyor,
-				string.format("ConveyorGuideAccent_%d_%d", slotIndex, sideIndex),
-				Vector3.new(segmentLength, conveyorConfig.GuideAccentHeight, conveyorConfig.GuideAccentThickness),
-				origin + Vector3.new(
-					offset,
-					deckTop + conveyorConfig.GuideHeight - conveyorConfig.GuideAccentHeight / 2,
-					guideOffset
-				),
-				colorFromRgb(if isSellerBay then conveyorConfig.SellerBay.AccentColor else conveyorConfig.GuideAccentColor)
-			)
-			accent.Material = Enum.Material.Neon
-			addSlotClickDetector(accent, slotIndex)
-
-			for supportIndex, supportOffset in ipairs({ -conveyorConfig.SupportOffsetX, conveyorConfig.SupportOffsetX }) do
-				local support = createPart(
-					conveyor,
-					string.format("ConveyorSupport_%d_%d_%d", slotIndex, sideIndex, supportIndex),
-					Vector3.new(conveyorConfig.SupportThickness, conveyorConfig.SupportHeight + conveyorConfig.Elevation, conveyorConfig.SupportThickness),
-					origin + Vector3.new(offset + supportOffset, (conveyorConfig.SupportHeight + conveyorConfig.Elevation) / 2, guideOffset),
-					colorFromRgb(conveyorConfig.SupportColor)
-				)
-				support.Material = Enum.Material.Metal
-			end
+			local z = side * railZ
+			piece(string.format("ConveyorLeg_%d_%d", legIndex, sideIndex), Vector3.new(config.Leg.Thickness, railBottom, config.Leg.Thickness),
+				at(x, railBottom / 2, z), config.Leg.Color, Enum.Material.Metal)
+			piece(string.format("ConveyorFoot_%d_%d", legIndex, sideIndex), Vector3.new(config.Leg.FootSize, 0.08, config.Leg.FootSize),
+				at(x, 0.04, z), config.Leg.Color, Enum.Material.Metal)
 		end
+		piece(string.format("ConveyorBrace_%d", legIndex), Vector3.new(config.Leg.Thickness * 0.7, config.Leg.Thickness * 0.7, railZ * 2),
+			at(x, config.Leg.BraceHeight, 0), config.Leg.Color, Enum.Material.Metal)
+	end
 
-		local areaLabel = Instance.new("BillboardGui")
-		areaLabel.Name = string.format("ConveyorAreaLabel_%d", slotIndex)
-		areaLabel.Adornee = belt
-		areaLabel.AlwaysOnTop = true
-		areaLabel.MaxDistance = conveyorConfig.LabelMaxDistance
-		areaLabel.Size = UDim2.fromOffset(conveyorConfig.LabelWidthPixels, conveyorConfig.LabelHeightPixels)
-		areaLabel.StudsOffset = Vector3.new(0, conveyorConfig.LabelHeight, conveyorConfig.BeltWidth / 2 + conveyorConfig.GuideThickness + 0.2)
-		areaLabel.Parent = belt
-
-		local areaText = Instance.new("TextLabel")
-		areaText.Name = "Label"
-		areaText.BackgroundTransparency = 1
-		areaText.Size = UDim2.fromScale(1, 1)
-		areaText.Text = FactoryLayout.getAreaLabel(slotIndex)
-		areaText.TextColor3 = colorFromRgb(if isSellerBay then conveyorConfig.SellerBay.LabelColor else conveyorConfig.LabelColor)
-		areaText.TextSize = conveyorConfig.LabelTextSize
-		areaText.TextStrokeColor3 = colorFromRgb(conveyorConfig.FrameColor)
-		areaText.TextStrokeTransparency = 0.2
-		areaText.Font = Enum.Font.GothamBold
-		areaText.Parent = areaLabel
+	-- One invisible click plate per slot, flush with the belt and below riding cubes.
+	for slotIndex = 1, slotCount do
+		local selector = createPart(conveyor, string.format("SlotSelector_%d", slotIndex),
+			Vector3.new(slotPitch - config.Selector.LengthInset, config.Selector.Thickness, config.BeltWidth + config.Rail.Thickness * 2),
+			at((slotIndex - 1) * slotPitch, beltTop + config.Selector.Thickness / 2, 0), Color3.new(1, 1, 1))
+		selector.Transparency = 1
+		selector.CastShadow = false
+		selector.CanTouch = false
+		addSlotClickDetector(selector, slotIndex)
 	end
 
 	return conveyor
@@ -294,8 +272,8 @@ local function refreshMachineVisuals(factory: any)
 	factory.sellerHitbox = nil
 
 	for slotIndex = 1, FactoryLayout.EditableSlotCount do
-		local belt = factory.conveyor:FindFirstChild(string.format("Conveyor_%d", slotIndex))
-		local detector = belt and belt:FindFirstChild("FactorySlotClick")
+		local selector = factory.conveyor:FindFirstChild(string.format("SlotSelector_%d", slotIndex))
+		local detector = selector and selector:FindFirstChild("FactorySlotClick")
 		if detector and detector:IsA("ClickDetector") then
 			detector.MaxActivationDistance = 32
 		end
@@ -339,6 +317,7 @@ local function updateVisualItems(player: Player, factory: any): boolean
 		local visual = factory.visualItems[item.Id]
 		if not visual then
 			visual = createPart(factory.plot, string.format("Item_%d", item.Id), Vector3.new(visualConfig.Size, visualConfig.Size, visualConfig.Size), factory.frame:PointToWorldSpace(Vector3.new(0, visualConfig.DropStartHeight + MachineVisualConfig.Conveyor.Elevation, 0)), Color3.fromRGB(235, 235, 235))
+			visual.Material = Enum.Material.SmoothPlastic
 			visual:SetAttribute("FactoryItem", true)
 			visual:SetAttribute("OwnerUserId", player.UserId)
 			visual:SetAttribute("ItemId", item.Id)

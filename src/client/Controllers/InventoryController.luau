@@ -32,6 +32,7 @@ local started = false
 local openPanel: ((string, number?, string?) -> ())? = nil
 local closePanel: (() -> ())? = nil
 local openListeners: { () -> () } = {}
+local targetListeners: { (number?) -> () } = {}
 
 local rarityColors: { [string]: Color3 } = {}
 for _, band in ipairs(EconomyConfig.RarityOddsBands) do
@@ -73,6 +74,11 @@ function InventoryController.onOpen(listener: () -> ())
 	table.insert(openListeners, listener)
 end
 
+-- Reports the conveyor slot whose placement panel is open (nil when none) for world highlights.
+function InventoryController.onPlacementTarget(listener: (number?) -> ())
+	table.insert(targetListeners, listener)
+end
+
 function InventoryController.start()
 	if started then
 		return
@@ -110,7 +116,7 @@ function InventoryController.start()
 	countBadge.Size = UDim2.fromOffset(24, 24)
 	countBadge.BackgroundColor3 = C.Accent
 	countBadge.TextColor3 = C.AccentText
-	countBadge.Font = Theme.Fonts.Heavy
+	countBadge.FontFace = Theme.Fonts.Heavy
 	countBadge.TextSize = 11
 	countBadge.Text = "0"
 	countBadge.Visible = false
@@ -290,11 +296,18 @@ function InventoryController.start()
 		end
 	end
 
-	local function setGrid(kind: string)
-		if kind == "Areas" then
-			grid.CellSize = UDim2.new(if metrics.Columns > 1 then 0.5 else 1, -10, 0, touch + 24)
-		else
-			grid.CellSize = UDim2.new(1 / metrics.Columns, -10, 0, cardHeight)
+	local function setGrid()
+		grid.CellSize = UDim2.new(1 / metrics.Columns, -10, 0, cardHeight)
+	end
+
+	local announcedTarget: number? = nil
+	local function announceTarget()
+		local slot = if panel.Visible and mode == "Placement" then targetSlot else nil
+		if slot ~= announcedTarget then
+			announcedTarget = slot
+			for _, listener in ipairs(targetListeners) do
+				task.spawn(listener, slot)
+			end
 		end
 	end
 
@@ -440,7 +453,7 @@ function InventoryController.start()
 		badge.BackgroundTransparency = 0.2
 		badge.Text = `×{multiplier}`
 		badge.TextColor3 = C.AccentText
-		badge.Font = Theme.Fonts.Heavy
+		badge.FontFace = Theme.Fonts.Heavy
 		badge.TextScaled = true
 		GlassUI.round(badge)
 		GlassUI.stroke(badge, C.Stroke, 0.6, 2)
@@ -473,31 +486,6 @@ function InventoryController.start()
 		end)
 	end
 
-	local function showAreas(definition: any)
-		mode = "AreaSelection"
-		clearRows(list)
-		empty.Visible = false
-		title.Text = "Choose an area"
-		subtitle.Text = definition.Description
-		setStatus(`Pick where to install {definition.DisplayName}.`, nil)
-		tabBar.Visible = false
-		backButton.Visible = true
-		setGrid("Areas")
-		local layout = normalizeLayout()
-		for slot = 1, state.SlotCount do
-			if FactoryLayout.expectedCategoryForSlot(slot) == definition.Category then
-				local current = layout[slot]
-				local currentDefinition = current and MachineDefinitions.get(current)
-				local label = `{FactoryLayout.getAreaLabel(slot)}  ·  {if currentDefinition then currentDefinition.DisplayName else "Empty"}`
-				local area = GlassUI.button(list, "Area_" .. slot, label, "Secondary", 14)
-				area.LayoutOrder = slot
-				area.Activated:Connect(function()
-					InventoryController.openPlacement(slot)
-				end)
-			end
-		end
-	end
-
 	render = function()
 		clearRows(list)
 		empty.Visible = false
@@ -513,7 +501,7 @@ function InventoryController.start()
 		for category, button in pairs(categoryTabs) do
 			GlassUI.setStyle(button, if category == activeCategory then "Selected" else "Ghost")
 		end
-		setGrid("Cards")
+		setGrid()
 
 		local ids, totals, placed, available = getCounts()
 		local ownedCount = 0
@@ -618,7 +606,7 @@ function InventoryController.start()
 			end
 		else
 			title.Text = "Inventory"
-			subtitle.Text = "Counts include machines installed in your factory."
+			subtitle.Text = "Click a conveyor slot to place or swap machines."
 			setStatus(string.format("%d machine%s owned across %d type%s.", ownedCount, if ownedCount == 1 then "" else "s", #ids, if #ids == 1 then "" else "s"), nil)
 			local rowIndex = 0
 			for _, machineId in ipairs(ids) do
@@ -628,24 +616,18 @@ function InventoryController.start()
 					local count = available[machineId] or 0
 					local detail = string.format("Owned %d  ·  Placed %d  ·  Free %d", totals[machineId] or 0, placed[machineId] or 0, count)
 					local _, actions = machineCard(machineId, rowIndex, false, detail)
-					if count > 0 then
-						local recyclable = definition.Rollable == true
-						local place = addAction(actions, "PlaceButton", "Place", "Primary", if recyclable then 0.6 else 1, 1)
-						place.Activated:Connect(function()
-							showAreas(definition)
+					-- Placement happens by clicking a conveyor slot; cards only offer recycling.
+					if count > 0 and definition.Rollable == true then
+						local recycle = addAction(actions, "ActionButton", "Recycle", "Secondary", 1, 1)
+						confirmable(recycle, "Recycle", function()
+							local response = invoke(sellMachine, machineId, 1)
+							if response and response.Success then
+								setStatus(string.format("Recycled one %s.", definition.DisplayName), true)
+								refresh()
+							elseif response then
+								setStatus(response.Reason or "Machine could not be recycled.", false)
+							end
 						end)
-						if recyclable then
-							local recycle = addAction(actions, "ActionButton", "Recycle", "Secondary", 0.4, 2)
-							confirmable(recycle, "Recycle", function()
-								local response = invoke(sellMachine, machineId, 1)
-								if response and response.Success then
-									setStatus(string.format("Recycled one %s.", definition.DisplayName), true)
-									refresh()
-								elseif response then
-									setStatus(response.Reason or "Machine could not be recycled.", false)
-								end
-							end)
-						end
 					end
 					visibleRowCount += 1
 				end
@@ -676,10 +658,12 @@ function InventoryController.start()
 			panel.Position = panelTarget + UDim2.fromOffset(18, 0)
 			TweenService:Create(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = panelTarget }):Play()
 		end
+		announceTarget()
 		refresh()
 	end
 	closePanel = function()
 		panel.Visible = false
+		announceTarget()
 	end
 
 	inventoryButton.Activated:Connect(function()
@@ -693,12 +677,14 @@ function InventoryController.start()
 		button.Activated:Connect(function()
 			activeCategory = category
 			mode = "Inventory"
+			announceTarget()
 			render()
 		end)
 	end
 	backButton.Activated:Connect(function()
 		mode = "Inventory"
 		targetSlot = nil
+		announceTarget()
 		render()
 	end)
 	closeButton.Activated:Connect(function()
@@ -758,18 +744,14 @@ function InventoryController.start()
 		status.Position = UDim2.new(0, pad + 2, 1, -28)
 		status.Size = UDim2.new(1, -pad * 2, 0, 20)
 		if state and panel.Visible then
-			if mode == "AreaSelection" then
-				setGrid("Areas")
-			else
-				render()
-			end
+			render()
 		end
 	end
 	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
 	layout()
 
 	presentationEvent.OnClientEvent:Connect(function(eventName: string)
-		if eventName == "InventoryChanged" and mode ~= "AreaSelection" then
+		if eventName == "InventoryChanged" then
 			refresh()
 		end
 	end)

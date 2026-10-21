@@ -102,13 +102,13 @@ function GlassUI.card(parent: Instance, name: string, tint: Color3?): Frame
 	return frame
 end
 
-function GlassUI.label(parent: Instance, name: string, text: string, size: number?, font: Enum.Font?): TextLabel
+function GlassUI.label(parent: Instance, name: string, text: string, size: number?, font: Font?): TextLabel
 	local label = Instance.new("TextLabel")
 	label.Name = name
 	label.BackgroundTransparency = 1
 	label.Text = text
 	label.TextColor3 = C.Text
-	label.Font = font or Theme.Fonts.Medium
+	label.FontFace = font or Theme.Fonts.Medium
 	label.TextSize = size or 14
 	label.TextWrapped = true
 	label.TextXAlignment = Enum.TextXAlignment.Left
@@ -200,7 +200,7 @@ function GlassUI.button(parent: Instance, name: string, text: string, style: But
 	button.Text = text
 	button.AutoButtonColor = false
 	button.BorderSizePixel = 0
-	button.Font = Theme.Fonts.Bold
+	button.FontFace = Theme.Fonts.Bold
 	button.TextSize = size or 14
 	button.TextWrapped = true
 	GlassUI.corner(button, Theme.Radius.Button)

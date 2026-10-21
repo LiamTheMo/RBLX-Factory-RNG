@@ -41,11 +41,14 @@ HudTheme.Radius = table.freeze({
 	Button = 10,
 })
 
+-- Rounded, friendly type that matches the low-poly islands: Fredoka One for headings
+-- and numbers, Nunito for everything else. Assign with `FontFace`, not `Font`.
+local NUNITO = "rbxasset://fonts/families/Nunito.json"
 HudTheme.Fonts = table.freeze({
-	Regular = Enum.Font.Gotham,
-	Medium = Enum.Font.GothamMedium,
-	Bold = Enum.Font.GothamBold,
-	Heavy = Enum.Font.GothamBlack,
+	Regular = Font.new(NUNITO, Enum.FontWeight.Regular),
+	Medium = Font.new(NUNITO, Enum.FontWeight.SemiBold),
+	Bold = Font.new(NUNITO, Enum.FontWeight.ExtraBold),
+	Heavy = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Regular),
 })
 
 -- Logical-pixel touch target. Controls scale with the HUD but never drop below it.
