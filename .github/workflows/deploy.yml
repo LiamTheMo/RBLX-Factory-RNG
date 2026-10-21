@@ -77,6 +77,8 @@ jobs:
           grep -q "IslandWorldBuilder" /tmp/TinyFactoryValidation.rbxlx
           grep -q "IslandWorldConfig" /tmp/TinyFactoryValidation.rbxlx
           grep -q "LootService" /tmp/TinyFactoryValidation.rbxlx
+          grep -q "GlassUI" /tmp/TinyFactoryValidation.rbxlx
+          grep -q "HudLayout" /tmp/TinyFactoryValidation.rbxlx
 
       - name: Validate code-only target mappings
         run: |

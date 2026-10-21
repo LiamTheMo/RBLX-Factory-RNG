@@ -6,6 +6,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
 local BoosterRules = require(Shared:WaitForChild("BoosterRules"))
+local HudTheme = require(Shared:WaitForChild("HudTheme"))
 local FactoryService = require(script.Parent.FactoryService)
 local BoosterService = require(script.Parent.BoosterService)
 local EffectService = require(script.Parent.EffectService)
@@ -75,23 +76,29 @@ local function addDisplay(part: BasePart, booster: any): BillboardGui
 	billboard.Adornee = part
 	billboard.AlwaysOnTop = true
 	billboard.MaxDistance = 70
-	billboard.Size = UDim2.fromOffset(120, 28)
+	billboard.Size = UDim2.fromOffset(144, 28)
 	billboard.StudsOffset = Vector3.new(0, 1.05, 0)
 	billboard.Parent = part
+	-- Matches the client glass HUD: translucent slate pill with a booster-colored rim.
 	local label = Instance.new("TextLabel")
-	label.BackgroundColor3 = Color3.fromRGB(28, 24, 21)
-	label.BackgroundTransparency = 0.1
+	label.BackgroundColor3 = HudTheme.Colors.Glass
+	label.BackgroundTransparency = HudTheme.Transparency.Glass
 	label.BorderSizePixel = 0
 	label.Size = UDim2.fromScale(1, 1)
-	label.Font = Enum.Font.GothamBold
+	label.Font = HudTheme.Fonts.Bold
 	label.Text = booster.DisplayName
-	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextColor3 = HudTheme.Colors.Text
 	label.TextSize = 12
 	label.TextWrapped = false
 	label.Parent = billboard
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
+	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = label
+	local rim = Instance.new("UIStroke")
+	rim.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	rim.Color = Color3.fromRGB(booster.Color[1], booster.Color[2], booster.Color[3])
+	rim.Transparency = 0.35
+	rim.Parent = label
 	return billboard
 end
 

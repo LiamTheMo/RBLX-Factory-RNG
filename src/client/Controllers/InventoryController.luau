@@ -2,6 +2,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -11,81 +12,38 @@ local PlacementRules = require(Shared:WaitForChild("PlacementRules"))
 local EconomyConfig = require(Shared:WaitForChild("EconomyConfig"))
 local EconomyRules = require(Shared:WaitForChild("EconomyRules"))
 local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
+local HudLayout = require(Shared:WaitForChild("HudLayout"))
+local ModelBuilder = require(Shared:WaitForChild("MachineModelBuilder"))
 
-local MACHINE_SECTIONS = {
+local GlassUI = require(script.Parent.GlassUI)
+
+local Theme = GlassUI.Theme
+local C = Theme.Colors
+
+local TABS = {
 	{ Category = "Producer", Title = "Droppers" },
 	{ Category = "Processor", Title = "Upgraders" },
 	{ Category = "Seller", Title = "Sellers" },
+	{ Category = "Booster", Title = "Boosters" },
 }
 
-local UI = require(script.Parent.AmberUI)
-local Layout = require(Shared.AmberLayout)
-local ModelBuilder = require(Shared.MachineModelBuilder)
 local InventoryController = {}
 local started = false
 local openPanel: ((string, number?, string?) -> ())? = nil
 local closePanel: (() -> ())? = nil
 
-local COLORS = {
-	Panel = UI.Panel,
-	Row = UI.Panel,
-	Button = Color3.fromRGB(68, 61, 77),
-	Accent = Color3.fromRGB(255, 210, 128),
-	Text = UI.Text,
-	Muted = UI.Muted,
-	Good = Color3.fromRGB(155, 230, 166),
-	Bad = Color3.fromRGB(255, 155, 145),
-}
-
 local rarityColors: { [string]: Color3 } = {}
 for _, band in ipairs(EconomyConfig.RarityOddsBands) do
-	local color = band.Color
-	rarityColors[band.Name] = Color3.fromRGB(color[1], color[2], color[3])
+	rarityColors[band.Name] = GlassUI.fromRgb(band.Color)
 end
 
-local function makeLabel(parent: Instance, name: string, text: string): TextLabel
-	local label = Instance.new("TextLabel")
-	label.Name = name
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextColor3 = COLORS.Text
-	label.Font = Enum.Font.Gotham
-	label.TextSize = 13
-	label.TextWrapped = true
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextYAlignment = Enum.TextYAlignment.Center
-	label.Parent = parent
-	return label
-end
-
-local function makeButton(parent: Instance, name: string, text: string): TextButton
-	local button = Instance.new("TextButton")
-	button.Name = name
-	button.Text = text
-	button.BackgroundColor3 = COLORS.Button
-	button.BorderSizePixel = 0
-	button.TextColor3 = COLORS.Text
-	button.Font = Enum.Font.GothamBold
-	button.TextSize = 12
-	button.TextWrapped = true
-	button.AutoButtonColor = true
-	button.Parent = parent
-	UI.skin(button, "Tab")
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 9)
-	corner.Parent = button
-	return button
-end
-
-local function addCorner(instance: Instance, radius: number)
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, radius)
-	corner.Parent = instance
+local function rarityColor(rarity: string): Color3
+	return rarityColors[rarity] or C.Text
 end
 
 local function clearRows(parent: Instance)
 	for _, child in ipairs(parent:GetChildren()) do
-		if not child:IsA("UIListLayout") and not child:IsA("UIGridLayout") and not child:IsA("UIPadding") then
+		if not child:IsA("UIGridLayout") and not child:IsA("UIPadding") then
 			child:Destroy()
 		end
 	end
@@ -126,120 +84,128 @@ function InventoryController.start()
 	local useBooster = remotes:WaitForChild("UseBooster") :: RemoteFunction
 	local presentationEvent = remotes:WaitForChild("PresentationEvent") :: RemoteEvent
 
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "FactoryInventoryHud"
-	screenGui.ResetOnSpawn = false
-	screenGui.DisplayOrder = 15
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-	screenGui.Parent = playerGui
+	local screenGui = GlassUI.screen(playerGui, "FactoryInventoryHud", 15)
 
-	local inventoryButton = makeButton(screenGui, "InventoryButton", "Inventory")
-	inventoryButton.Size = UDim2.fromOffset(136, 40)
-	inventoryButton.BackgroundColor3 = COLORS.Panel
-	inventoryButton.TextSize = 14
-	inventoryButton.Text = ""
-	UI.asset(inventoryButton.AmberBackground, "Inventory")
+	-- Persistent Inventory button, bottom left.
+	local inventoryButton = GlassUI.button(screenGui, "InventoryButton", "", "Secondary")
+	inventoryButton.BackgroundColor3 = C.Glass
+	inventoryButton.BackgroundTransparency = Theme.Transparency.Glass
+	GlassUI.setRadius(inventoryButton, 16)
+	local buttonScale = inventoryButton:FindFirstChildOfClass("UIScale")
+	local boxIcon = GlassUI.icon(inventoryButton, "Box")
+	boxIcon.AnchorPoint = Vector2.new(0, 0.5)
+	local buttonCaption = GlassUI.label(inventoryButton, "Caption", "Inventory", 16, Theme.Fonts.Bold)
+	buttonCaption.TextWrapped = false
+	local countBadge = Instance.new("TextLabel")
+	countBadge.Name = "CountBadge"
+	countBadge.AnchorPoint = Vector2.new(0.5, 0.5)
+	countBadge.Position = UDim2.new(1, -4, 0, 4)
+	countBadge.Size = UDim2.fromOffset(24, 24)
+	countBadge.BackgroundColor3 = C.Accent
+	countBadge.TextColor3 = C.AccentText
+	countBadge.Font = Theme.Fonts.Heavy
+	countBadge.TextSize = 11
+	countBadge.Text = "0"
+	countBadge.Visible = false
+	GlassUI.round(countBadge)
+	countBadge.Parent = inventoryButton
 
-	local panel = Instance.new("Frame")
-	panel.Name = "MachinePanel"
-	panel.AnchorPoint = Vector2.new(0.5, 0.5)
-	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.BackgroundColor3 = COLORS.Panel
-	panel.BackgroundTransparency = 0.04
-	panel.BorderSizePixel = 0
+	-- Inventory drawer.
+	local panel = GlassUI.glass(screenGui, "MachinePanel")
 	panel.Visible = false
-	panel.Parent = screenGui
-	UI.skin(panel, "Panel")
-	addCorner(panel, 16)
-	local panelStroke = Instance.new("UIStroke")
-	panelStroke.Color = Color3.fromRGB(120, 108, 137)
-	panelStroke.Transparency = 1
-	panelStroke.Thickness = 1
-	panelStroke.Parent = panel
+	local panelScale = Instance.new("UIScale")
+	panelScale.Parent = panel
 
-	local title = makeLabel(panel, "PanelTitle", "Inventory")
-	title.Position = UDim2.fromOffset(18, 12)
-	title.Size = UDim2.new(1, -76, 0, 28)
-	title.Font = Enum.Font.GothamBold
-	title.TextColor3 = COLORS.Accent
-	title.TextSize = 28
-	local chest = UI.image(panel, "Chest")
-	chest.Position = UDim2.fromOffset(24, 12)
-	chest.Size = UDim2.fromOffset(44, 44)
+	local title = GlassUI.label(panel, "PanelTitle", "Inventory", 22, Theme.Fonts.Heavy)
+	title.TextWrapped = false
+	title.TextTruncate = Enum.TextTruncate.AtEnd
+	local subtitle = GlassUI.label(panel, "Subtitle", "", 12)
+	subtitle.TextColor3 = C.Muted
 
-	local closeButton = makeButton(panel, "CloseButton", "×")
-	closeButton.Position = UDim2.new(1, -50, 0, 9)
-	closeButton.Size = UDim2.fromOffset(38, 34)
-	closeButton.TextSize = 20
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "CloseButton"
 	closeButton.Text = ""
-	UI.asset(closeButton.AmberBackground, "Close")
+	closeButton.BackgroundTransparency = 1
+	closeButton.AutoButtonColor = false
+	closeButton.Parent = panel
+	local closeFace = GlassUI.glass(closeButton, "Face", 999)
+	closeFace.AnchorPoint = Vector2.new(0.5, 0.5)
+	closeFace.Position = UDim2.fromScale(0.5, 0.5)
+	closeFace.Size = UDim2.fromOffset(34, 34)
+	local closeIcon = GlassUI.icon(closeFace, "Close")
+	closeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	closeIcon.Position = UDim2.fromScale(0.5, 0.5)
+	closeIcon.Size = UDim2.fromOffset(14, 14)
 
-	local subtitle = makeLabel(panel, "Subtitle", "")
-	subtitle.Position = UDim2.fromOffset(18, 42)
-	subtitle.Size = UDim2.new(1, -36, 0, 22)
-	subtitle.TextColor3 = COLORS.Muted
-	subtitle.TextSize = 12
+	local tabBar = Instance.new("Frame")
+	tabBar.Name = "TabBar"
+	tabBar.BackgroundColor3 = C.Stroke
+	tabBar.BackgroundTransparency = 0.94
+	tabBar.BorderSizePixel = 0
+	GlassUI.corner(tabBar, 12)
+	tabBar.Parent = panel
+	local categoryTabs: { [string]: TextButton } = {}
+	for index, tab in ipairs(TABS) do
+		local button = GlassUI.button(tabBar, tab.Category .. "Tab", tab.Title, "Ghost", 13)
+		button.Position = UDim2.new((index - 1) / #TABS, 4, 0, 4)
+		button.Size = UDim2.new(1 / #TABS, -8, 1, -8)
+		button.TextWrapped = false
+		button.TextScaled = true
+		local limit = Instance.new("UITextSizeConstraint")
+		limit.MinTextSize = 9
+		limit.MaxTextSize = 14
+		limit.Parent = button
+		GlassUI.padding(button, 6, 8)
+		categoryTabs[tab.Category] = button
+	end
 
-	local status = makeLabel(panel, "Status", "Loading factory inventory...")
-	status.Position = UDim2.fromOffset(18, 66)
-	status.Size = UDim2.new(1, -36, 0, 24)
-	status.TextSize = 12
+	local backButton = GlassUI.button(panel, "BackButton", "‹  Back to inventory", "Ghost", 13)
+	backButton.Visible = false
 
-	local machinesTab = makeButton(panel, "MachinesTab", "Machines")
-	machinesTab.Position = UDim2.fromOffset(18, 96)
-	machinesTab.Size = UDim2.fromOffset(116, 32)
-	local boostersTab = makeButton(panel, "BoostersTab", "Boosters")
-	boostersTab.Position = UDim2.fromOffset(142, 96)
-	boostersTab.Size = UDim2.fromOffset(116, 32)
+	local status = GlassUI.label(panel, "Status", "Loading factory inventory...", 12)
+	status.TextColor3 = C.Muted
+	status.TextWrapped = false
+	status.TextTruncate = Enum.TextTruncate.AtEnd
 
 	local list = Instance.new("ScrollingFrame")
 	list.Name = "MachineList"
-	list.Position = UDim2.fromOffset(12, 136)
-	list.Size = UDim2.new(1, -24, 1, -148)
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
-	list.ScrollBarThickness = if UserInputService.TouchEnabled then 3 else 5
+	list.ScrollBarThickness = if UserInputService.TouchEnabled then 3 else 4
+	list.ScrollBarImageColor3 = C.Muted
 	list.ScrollingDirection = Enum.ScrollingDirection.Y
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	list.CanvasSize = UDim2.fromOffset(0, 0)
 	list.Parent = panel
 	local listPadding = Instance.new("UIPadding")
-	listPadding.PaddingBottom = UDim.new(0, 6)
+	listPadding.PaddingBottom = UDim.new(0, 8)
 	listPadding.PaddingLeft = UDim.new(0, 2)
-	listPadding.PaddingRight = UDim.new(0, 2)
+	listPadding.PaddingRight = UDim.new(0, 6)
 	listPadding.PaddingTop = UDim.new(0, 2)
 	listPadding.Parent = list
-	local listLayout = Instance.new("UIGridLayout")
-	listLayout.CellPadding = UDim2.fromOffset(8, 10)
-	listLayout.CellSize = UDim2.new(1/3, -9, 0, 280)
-	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Parent = list
+	local grid = Instance.new("UIGridLayout")
+	grid.CellPadding = UDim2.fromOffset(10, 10)
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.Parent = list
+
+	local empty = GlassUI.label(panel, "EmptyInventory", "", 13)
+	empty.TextColor3 = C.Muted
+	empty.TextXAlignment = Enum.TextXAlignment.Center
+	empty.Visible = false
 
 	local state: any = nil
-	local landscapeCompact = false
-	local panelScale = Instance.new("UIScale")
-	panelScale.Parent = panel
+	local metrics = HudLayout.measure(1024, 768)
+	local touch = Theme.MinTouch
+	local cardHeight = 290
 	local mode = "Inventory"
-	local activeTab = "Machines"
 	local activeCategory = "Producer"
-	local categoryTabs: { [string]: TextButton } = { Producer = machinesTab, Booster = boostersTab }
-	for _, section in ipairs(MACHINE_SECTIONS) do
-		if section.Category ~= "Producer" then
-			categoryTabs[section.Category] = makeButton(panel, section.Category .. "Tab", section.Title)
-		end
-	end
-	machinesTab.Text = "Droppers"
-	for key, button in pairs(categoryTabs) do
-		local icon = UI.image(button, key)
-		icon.Position = UDim2.fromScale(0.06, 0.23)
-		icon.Size = UDim2.fromScale(0.22, 0.5)
-		UI.caption(button, 0.28)
-	end
 	local targetSlot: number? = nil
+	local lastOwned: number? = nil
+	local panelTarget = UDim2.new()
 
 	local function setStatus(message: string, success: boolean?)
 		status.Text = message
-		status.TextColor3 = if success == true then COLORS.Good elseif success == false then COLORS.Bad else COLORS.Muted
+		status.TextColor3 = if success == true then C.Good elseif success == false then C.Bad else C.Muted
 	end
 
 	local function invoke(remote: RemoteFunction, ...: any): any
@@ -306,7 +272,6 @@ function InventoryController.start()
 		return ids, totals, placed, available
 	end
 
-
 	local render: () -> ()
 	local function refresh()
 		local response = invoke(getFactoryState)
@@ -318,123 +283,230 @@ function InventoryController.start()
 		end
 	end
 
-	local function makeRow(machineId: string, rowIndex: number, isPlacement: boolean, availableCount: number, placedCount: number, totalCount: number, actionText: string?, actionEnabled: boolean, action: (() -> ())?, detailOverride: string?): Frame
-		local definition = MachineDefinitions.get(machineId)
-		local row = Instance.new("Frame")
-		row.Name = if isPlacement then string.format("Place_%s_%d", machineId, rowIndex) else "Owned_" .. machineId
-		row.LayoutOrder = rowIndex
-		row.Parent = list
-		UI.skin(row, if isPlacement and actionEnabled then "SelectedCard" else "Card")
+	local function setGrid(kind: string)
+		if kind == "Areas" then
+			grid.CellSize = UDim2.new(if metrics.Columns > 1 then 0.5 else 1, -10, 0, touch + 24)
+		else
+			grid.CellSize = UDim2.new(1 / metrics.Columns, -10, 0, cardHeight)
+		end
+	end
+
+	-- Shared card chrome: preview well, name, rarity chip, odds, counts and a button row.
+	local function makeCard(name: string, order: number, tint: Color3, displayName: string, chipText: string, odds: string, details: string): (Frame, Frame, Frame)
+		local row = metrics.CardStyle == "Row"
+		local card = GlassUI.card(list, name, tint)
+		card.LayoutOrder = order
+		local well = Instance.new("Frame")
+		well.Name = "PreviewWell"
+		well.BackgroundColor3 = C.Stroke
+		well.BackgroundTransparency = 0.95
+		well.BorderSizePixel = 0
+		GlassUI.corner(well, 10)
+		well.Position = UDim2.fromOffset(8, 8)
+		well.Size = if row then UDim2.new(0.34, -8, 1, -16) else UDim2.new(1, -16, 0, cardHeight - 132 - touch)
+		well.Parent = card
+		local infoX = if row then 0.34 else 0
+		local infoTop = if row then 10 else cardHeight - 118 - touch
+		local nameLabel = GlassUI.label(card, if name:sub(1, 8) == "Booster_" then "BoosterName" else "MachineName", displayName, 15, Theme.Fonts.Bold)
+		nameLabel.Position = UDim2.new(infoX, 10, 0, infoTop)
+		nameLabel.Size = UDim2.new(1 - infoX, -20, 0, 20)
+		nameLabel.TextWrapped = false
+		nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		nameLabel.TextXAlignment = if row then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
+		local chipRow = Instance.new("Frame")
+		chipRow.Name = "Tags"
+		chipRow.BackgroundTransparency = 1
+		chipRow.Position = UDim2.new(infoX, 10, 0, infoTop + 26)
+		chipRow.Size = UDim2.new(1 - infoX, -20, 0, 22)
+		chipRow.Parent = card
+		local chipLayout = Instance.new("UIListLayout")
+		chipLayout.FillDirection = Enum.FillDirection.Horizontal
+		chipLayout.HorizontalAlignment = if row then Enum.HorizontalAlignment.Left else Enum.HorizontalAlignment.Center
+		chipLayout.Padding = UDim.new(0, 6)
+		chipLayout.Parent = chipRow
+		GlassUI.chip(chipRow, "Rarity", chipText, tint, 11)
+		local oddsLabel = GlassUI.label(card, if name:sub(1, 8) == "Booster_" then "BoosterEffect" else "RollOdds", odds, 12, Theme.Fonts.Medium)
+		oddsLabel.Position = UDim2.new(infoX, 10, 0, infoTop + 54)
+		oddsLabel.Size = UDim2.new(1 - infoX, -20, 0, 16)
+		oddsLabel.TextXAlignment = nameLabel.TextXAlignment
+		local detailLabel = GlassUI.label(card, if name:sub(1, 8) == "Booster_" then "BoosterDetails" else "MachineDetails", details, 11)
+		detailLabel.Position = UDim2.new(infoX, 10, 0, infoTop + 72)
+		detailLabel.Size = UDim2.new(1 - infoX, -20, 0, 16)
+		detailLabel.TextColor3 = C.Muted
+		detailLabel.TextWrapped = false
+		detailLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		detailLabel.TextXAlignment = nameLabel.TextXAlignment
+		local actions = Instance.new("Frame")
+		actions.Name = "Actions"
+		actions.BackgroundTransparency = 1
+		actions.Position = UDim2.new(infoX, 10, 1, -touch - 10)
+		actions.Size = UDim2.new(1 - infoX, -20, 0, touch)
+		actions.Parent = card
+		local actionLayout = Instance.new("UIListLayout")
+		actionLayout.FillDirection = Enum.FillDirection.Horizontal
+		actionLayout.Padding = UDim.new(0, 8)
+		actionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		actionLayout.Parent = actions
+		return card, well, actions
+	end
+
+	-- Buttons share the action row; `weight` splits its width (Place gets more than Recycle).
+	local function addAction(actions: Frame, name: string, text: string, style: GlassUI.ButtonStyle, weight: number, order: number): TextButton
+		local button = GlassUI.button(actions, name, text, style, 13)
+		button.LayoutOrder = order
+		button.Size = UDim2.new(weight, if weight < 1 then -4 else 0, 1, 0)
+		return button
+	end
+
+	local function addPreview(well: Frame, definition: any)
 		local viewport = Instance.new("ViewportFrame")
 		viewport.Name = "MachinePreview"
 		viewport.BackgroundTransparency = 1
-		viewport.Position = UDim2.fromScale(0.09, 0.06)
-		viewport.Size = UDim2.fromScale(0.82, 0.43)
-		viewport.Ambient = Color3.fromRGB(220, 209, 189)
-		viewport.LightColor = Color3.fromRGB(255, 239, 210)
+		viewport.Size = UDim2.fromScale(1, 1)
+		viewport.Ambient = Color3.fromRGB(205, 212, 224)
+		viewport.LightColor = Color3.fromRGB(255, 244, 225)
 		viewport.LightDirection = Vector3.new(-1, -1, -1)
-		viewport.Parent = row
-		if definition then
-			local world = Instance.new("WorldModel")
-			world.Parent = viewport
-			local model = ModelBuilder.build(world, Vector3.zero, 1, definition)
-			for _, child in ipairs(model:GetDescendants()) do
-				if child:IsA("BasePart") and child.Transparency == 1 then child:Destroy() end
+		viewport.Parent = well
+		local world = Instance.new("WorldModel")
+		world.Parent = viewport
+		local model = ModelBuilder.build(world, Vector3.zero, 1, definition)
+		for _, child in ipairs(model:GetDescendants()) do
+			if child:IsA("BasePart") and child.Transparency == 1 then
+				child:Destroy()
 			end
-			local box, size = model:GetBoundingBox()
-			local camera = Instance.new("Camera")
-			camera.FieldOfView = 35
-			local distance = math.max(size.X, size.Y, size.Z) * 2.3
-			camera.CFrame = CFrame.lookAt(box.Position + Vector3.new(-distance, distance * 0.65, -distance), box.Position)
-			camera.Parent = viewport
-			viewport.CurrentCamera = camera
 		end
-		local nameLabel = makeLabel(row, "MachineName", definition and definition.DisplayName or machineId)
-		nameLabel.Position = UDim2.fromScale(0.07, 0.48)
-		nameLabel.Size = UDim2.fromScale(0.86, 0.09)
-		nameLabel.TextXAlignment = Enum.TextXAlignment.Center
-		nameLabel.Font = Enum.Font.GothamBold
-		nameLabel.TextSize = 15
+		local box, size = model:GetBoundingBox()
+		local camera = Instance.new("Camera")
+		camera.FieldOfView = 35
+		local distance = math.max(size.X, size.Y, size.Z) * 2.3
+		camera.CFrame = CFrame.lookAt(box.Position + Vector3.new(-distance, distance * 0.65, -distance), box.Position)
+		camera.Parent = viewport
+		viewport.CurrentCamera = camera
+	end
+
+	local function machineCard(machineId: string, order: number, isPlacement: boolean, details: string): (Frame, Frame)
+		local definition = MachineDefinitions.get(machineId)
 		local rarity = definition and definition.Rarity or "Common"
-		if UI.Assets[rarity] then
-			local badge = UI.image(row, rarity)
-			badge.Position = UDim2.fromScale(0.18, 0.55)
-			badge.Size = UDim2.fromScale(0.64, 0.14)
-			badge.ScaleType = Enum.ScaleType.Stretch
-		else
-			local badge = makeLabel(row, "Rarity", rarity)
-			badge.Position = UDim2.fromScale(0.1, 0.56)
-			badge.Size = UDim2.fromScale(0.8, 0.12)
-			badge.TextColor3 = rarityColors[rarity] or COLORS.Text
-		end
 		local odds = if definition and definition.Rollable then EconomyRules.getMachineOddsLabel(machineId, MachineDefinitions.getRollPool()) else "Starter"
-		local oddsLabel = makeLabel(row, "RollOdds", odds or "")
-		oddsLabel.Position = UDim2.fromScale(0.1, 0.68)
-		oddsLabel.Size = UDim2.fromScale(0.8, 0.07)
-		oddsLabel.TextXAlignment = Enum.TextXAlignment.Center
-		local details = makeLabel(row, "MachineDetails", string.format("Owned %d  ·  Placed %d  ·  Free %d", totalCount, placedCount, availableCount))
-		details.Position = UDim2.fromScale(0.07, 0.76)
-		details.Size = UDim2.fromScale(0.86, 0.065)
-		details.TextSize = 10
-		details.TextXAlignment = Enum.TextXAlignment.Center
-		details.TextColor3 = COLORS.Muted
-		if isPlacement then details.Text = detailOverride or details.Text end
-		row:SetAttribute("Description", definition and definition.Description or "")
-		if actionText then
-			local button = makeButton(row, "ActionButton", actionText)
-			UI.asset(button.AmberBackground, "Action")
-			button.Position = UDim2.fromScale(0.08, 0.83)
-			button.Size = UDim2.new(0.84, 0, 0, 44)
-			button.Position = UDim2.new(0.08, 0, 1, -54)
-			button.TextColor3 = COLORS.Panel
-			button.Active = actionEnabled
-			local confirmed = false
-			button.Activated:Connect(function()
-				if actionText == "Recycle" and not confirmed then
-					confirmed = true
-					button.Text = "Confirm recycle"
-					return
-				end
-				if actionEnabled and action then action() end
-			end)
+		local name = if isPlacement then string.format("Place_%s_%d", machineId, order) else "Owned_" .. machineId
+		local card, well, actions = makeCard(name, order, rarityColor(rarity), definition and definition.DisplayName or machineId, rarity, if odds and odds ~= "Starter" then "Odds " .. odds else "Starter machine", details)
+		card:SetAttribute("Description", definition and definition.Description or "")
+		if definition then
+			addPreview(well, definition)
 		end
-		if landscapeCompact then
-			viewport.Position = UDim2.fromScale(0.04, 0.06)
-			viewport.Size = UDim2.fromScale(0.36, 0.78)
-			nameLabel.Position = UDim2.fromScale(0.43, 0.09)
-			nameLabel.Size = UDim2.fromScale(0.53, 0.16)
-			local badge = row:FindFirstChild(rarity .. "Artwork") or row:FindFirstChild("Rarity")
-			if badge and badge:IsA("GuiObject") then
-				badge.Position = UDim2.fromScale(0.48, 0.26)
-				badge.Size = UDim2.fromScale(0.43, 0.17)
+		return card, actions
+	end
+
+	local function confirmable(button: TextButton, label: string, action: () -> ())
+		local armed = false
+		button.Activated:Connect(function()
+			if not armed then
+				armed = true
+				button.Text = "Confirm"
+				GlassUI.setStyle(button, "Danger")
+				task.delay(3, function()
+					if armed and button.Parent then
+						armed = false
+						button.Text = label
+						GlassUI.setStyle(button, "Secondary")
+					end
+				end)
+				return
 			end
-			oddsLabel.Position = UDim2.fromScale(0.43, 0.45)
-			oddsLabel.Size = UDim2.fromScale(0.53, 0.12)
-			details.Position = UDim2.fromScale(0.43, 0.58)
-			details.Size = UDim2.fromScale(0.53, 0.09)
-			local button = row:FindFirstChild("ActionButton")
-			if button and button:IsA("TextButton") then
-				button.Position = UDim2.new(0.43, 0, 1, -54)
-				button.Size = UDim2.new(0.53, 0, 0, 44)
+			armed = false
+			action()
+		end)
+	end
+
+	local function boosterCard(booster: any, count: number, order: number)
+		local color = GlassUI.fromRgb(booster.Color)
+		local effect = booster.Effect
+		local multiplier = effect.Multiplier or 1
+		local kind = if effect.Kind == "SaleValue" then "Sale value" elseif effect.Kind == "Luck" then "Roll luck" else tostring(effect.Kind)
+		local card, well, actions = makeCard("Booster_" .. booster.Id, order, color, booster.DisplayName, "Booster", `{kind} ×{multiplier} · {effect.DurationSeconds or 0}s`, string.format("Owned ×%d", count))
+		local badge = Instance.new("TextLabel")
+		badge.Name = "BoosterBadge"
+		badge.AnchorPoint = Vector2.new(0.5, 0.5)
+		badge.Position = UDim2.fromScale(0.5, 0.5)
+		badge.Size = UDim2.fromScale(0.6, 0.6)
+		badge.BackgroundColor3 = color
+		badge.BackgroundTransparency = 0.2
+		badge.Text = `×{multiplier}`
+		badge.TextColor3 = C.AccentText
+		badge.Font = Theme.Fonts.Heavy
+		badge.TextScaled = true
+		GlassUI.round(badge)
+		GlassUI.stroke(badge, C.Stroke, 0.6, 2)
+		GlassUI.padding(badge, 10)
+		local ratio = Instance.new("UIAspectRatioConstraint")
+		ratio.AspectRatio = 1
+		ratio.Parent = badge
+		badge.Parent = well
+		local use = addAction(actions, "UseButton", "Use", "Primary", 1, 1)
+		use.Activated:Connect(function()
+			local response = invoke(useBooster, booster.Id)
+			if response and response.Success then
+				setStatus(`{booster.DisplayName} active.`, true)
+				refresh()
+			elseif response then
+				setStatus(response.Reason or "Booster could not be used.", false)
+			end
+		end)
+		return card
+	end
+
+	local function placementRow(machineId: string, order: number, detail: string, actionText: string, enabled: boolean, action: () -> ())
+		local _, actions = machineCard(machineId, order, true, detail)
+		local button = addAction(actions, "ActionButton", actionText, "Primary", 1, 1)
+		GlassUI.setEnabled(button, enabled)
+		button.Activated:Connect(function()
+			if enabled then
+				action()
+			end
+		end)
+	end
+
+	local function showAreas(definition: any)
+		mode = "AreaSelection"
+		clearRows(list)
+		empty.Visible = false
+		title.Text = "Choose an area"
+		subtitle.Text = definition.Description
+		setStatus(`Pick where to install {definition.DisplayName}.`, nil)
+		tabBar.Visible = false
+		backButton.Visible = true
+		setGrid("Areas")
+		local layout = normalizeLayout()
+		for slot = 1, state.SlotCount do
+			if FactoryLayout.expectedCategoryForSlot(slot) == definition.Category then
+				local current = layout[slot]
+				local currentDefinition = current and MachineDefinitions.get(current)
+				local label = `{FactoryLayout.getAreaLabel(slot)}  ·  {if currentDefinition then currentDefinition.DisplayName else "Empty"}`
+				local area = GlassUI.button(list, "Area_" .. slot, label, "Secondary", 14)
+				area.LayoutOrder = slot
+				area.Activated:Connect(function()
+					InventoryController.openPlacement(slot)
+				end)
 			end
 		end
-		return row
 	end
 
 	render = function()
 		clearRows(list)
+		empty.Visible = false
 		if not state then
 			title.Text = "Inventory"
 			subtitle.Text = "Factory data is not ready yet."
 			setStatus("Waiting for the factory to load...", nil)
 			return
 		end
-
+		local inventoryMode = mode == "Inventory"
+		tabBar.Visible = inventoryMode
+		backButton.Visible = not inventoryMode
 		for category, button in pairs(categoryTabs) do
-			button.Visible = mode == "Inventory"
-			local selected = if category == "Booster" then activeTab == "Boosters" else activeTab == "Machines" and activeCategory == category
-			UI.asset(button.AmberBackground, if selected then "SelectedTab" else "Tab")
+			GlassUI.setStyle(button, if category == activeCategory then "Selected" else "Ghost")
 		end
+		setGrid("Cards")
 
 		local ids, totals, placed, available = getCounts()
 		local ownedCount = 0
@@ -442,6 +514,17 @@ function InventoryController.start()
 			ownedCount += count
 		end
 		inventoryButton:SetAttribute("OwnedCount", ownedCount)
+		countBadge.Text = if ownedCount > 99 then "99+" else tostring(ownedCount)
+		countBadge.Visible = ownedCount > 0
+		if lastOwned and ownedCount > lastOwned and buttonScale then
+			buttonScale.Scale = 1.1
+			TweenService:Create(buttonScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		end
+		lastOwned = ownedCount
+		-- Hidden panels only track the badge; cards and previews rebuild when opened.
+		if not panel.Visible then
+			return
+		end
 		local visibleRowCount = 0
 
 		if mode == "Placement" and targetSlot then
@@ -454,33 +537,27 @@ function InventoryController.start()
 			local currentId = state.Layout[placementSlot]
 			local currentDefinition = if currentId and currentId ~= "" then MachineDefinitions.get(currentId) else nil
 			local currentName = if currentId and currentId ~= "" then (currentDefinition and currentDefinition.DisplayName or currentId) else "Empty"
-			local currentMachineName = currentDefinition and currentDefinition.DisplayName or currentName
 			setStatus(string.format("%s · %s · Capacity %d", areaLabel, currentName, state.Capacity), nil)
 
 			local layout = normalizeLayout()
 			local rowIndex = 0
 			for _, machineId in ipairs(ids) do
 				local count = available[machineId] or 0
-				local machineDefinition = MachineDefinitions.get(machineId)
-				if count > 0 and machineDefinition and machineDefinition.Category == requiredCategory then
+				local definition = MachineDefinitions.get(machineId)
+				if count > 0 and definition and definition.Category == requiredCategory then
 					rowIndex += 1
 					local candidate, placementError = PlacementRules.createPlacementLayout(layout, machineId, placementSlot, state.Capacity)
 					local canPlace = candidate ~= nil
-					local definition = MachineDefinitions.get(machineId)
-					local detail = if canPlace
-						then string.format("%s · Available ×%d", definition and definition.Rarity or "Unknown", count)
-						else string.format("%s · %s", definition and definition.Rarity or "Unknown", placementError or "Cannot place here")
-					makeRow(machineId, rowIndex, true, count, placed[machineId] or 0, totals[machineId] or 0, if currentId and currentId ~= "" then "Replace" else "Place", canPlace, function()
+					local detail = if canPlace then string.format("Available ×%d", count) else (placementError or "Cannot place here")
+					placementRow(machineId, rowIndex, detail, if currentId and currentId ~= "" then "Replace" else "Place", canPlace, function()
 						local response = invoke(placeMachine, machineId, placementSlot, currentId ~= nil and currentId ~= "")
 						if response and response.Success then
-							local placedDefinition = MachineDefinitions.get(machineId)
-							setStatus(string.format("Placed %s in area %d.", placedDefinition and placedDefinition.DisplayName or machineId, placementSlot), true)
-							refresh()
+							setStatus(string.format("Placed %s in area %d.", definition.DisplayName, placementSlot), true)
 						elseif response then
 							setStatus(response.Reason or "Machine could not be placed.", false)
-							refresh()
 						end
-					end, detail)
+						refresh()
+					end)
 					visibleRowCount += 1
 				end
 			end
@@ -491,21 +568,17 @@ function InventoryController.start()
 				if sourceId and sourceDefinition and sourceDefinition.Category == requiredCategory and sourceSlot ~= placementSlot then
 					local candidate, moveError = PlacementRules.createMoveLayout(layout, sourceSlot, placementSlot, state.Capacity)
 					rowIndex += 1
-					local sourceName = sourceDefinition and sourceDefinition.DisplayName or sourceId
 					local canMove = candidate ~= nil
-					local detail = if canMove
-						then string.format("%s · currently in area %d", sourceDefinition and sourceDefinition.Rarity or "Unknown", sourceSlot)
-						else string.format("%s · %s", sourceDefinition and sourceDefinition.Rarity or "Unknown", moveError or "Cannot move here")
-					makeRow(sourceId, rowIndex, true, 0, placed[sourceId] or 0, totals[sourceId] or 0, string.format("Move %d", sourceSlot), canMove, function()
+					local detail = if canMove then string.format("Currently in area %d", sourceSlot) else (moveError or "Cannot move here")
+					placementRow(sourceId, rowIndex, detail, string.format("Move from %d", sourceSlot), canMove, function()
 						local response = invoke(moveMachine, sourceSlot, placementSlot)
 						if response and response.Success then
-							setStatus(string.format("Moved %s to area %d.", sourceName, placementSlot), true)
-							refresh()
+							setStatus(string.format("Moved %s to area %d.", sourceDefinition.DisplayName, placementSlot), true)
 						elseif response then
 							setStatus(response.Reason or "Machine could not be moved.", false)
-							refresh()
 						end
-					end, detail)
+						refresh()
+					end)
 					visibleRowCount += 1
 				end
 			end
@@ -513,140 +586,70 @@ function InventoryController.start()
 			local removable = PlacementRules.createRemoveLayout(layout, placementSlot, state.Capacity)
 			if removable and currentId and currentId ~= "" and currentDefinition and currentDefinition.Category == "Processor" then
 				rowIndex += 1
-				makeRow(currentId, rowIndex, true, available[currentId] or 0, placed[currentId] or 0, totals[currentId] or 0, "Return", true, function()
+				placementRow(currentId, rowIndex, "Installed in this area", "Return to inventory", true, function()
 					local response = invoke(removeMachine, placementSlot)
 					if response and response.Success then
-						setStatus(string.format("Returned %s to your available machines.", currentMachineName), true)
+						setStatus(string.format("Returned %s to your available machines.", currentName), true)
 						refresh()
 					elseif response then
 						setStatus(response.Reason or "Machine could not be returned.", false)
 					end
-				end, string.format("%s · installed in this area", currentDefinition.Rarity))
+				end)
 				visibleRowCount += 1
+			end
+		elseif activeCategory == "Booster" then
+			title.Text = "Inventory"
+			subtitle.Text = "Collected boosters stay here until you use them."
+			setStatus("Run over world drops to collect boosters.", nil)
+			local boosterCounts = state.BoosterInventory or {}
+			for index, booster in ipairs(BoosterConfig.Definitions) do
+				local count = boosterCounts[booster.Id] or 0
+				if count > 0 then
+					boosterCard(booster, count, index)
+					visibleRowCount += 1
+				end
 			end
 		else
 			title.Text = "Inventory"
-			if activeTab == "Boosters" then
-				subtitle.Text = "Collected modifiers stay here until you use them."
-				setStatus("Run over world drops to collect boosters.", nil)
-				local boosterCounts = state.BoosterInventory or {}
-				local rowIndex = 0
-				for _, booster in ipairs(BoosterConfig.Definitions) do
-					local count = boosterCounts[booster.Id] or 0
+			subtitle.Text = "Counts include machines installed in your factory."
+			setStatus(string.format("%d machine%s owned across %d type%s.", ownedCount, if ownedCount == 1 then "" else "s", #ids, if #ids == 1 then "" else "s"), nil)
+			local rowIndex = 0
+			for _, machineId in ipairs(ids) do
+				local definition = MachineDefinitions.get(machineId)
+				if definition and definition.Category == activeCategory then
+					rowIndex += 1
+					local count = available[machineId] or 0
+					local detail = string.format("Owned %d  ·  Placed %d  ·  Free %d", totals[machineId] or 0, placed[machineId] or 0, count)
+					local _, actions = machineCard(machineId, rowIndex, false, detail)
 					if count > 0 then
-						rowIndex += 1
-						local row = Instance.new("Frame")
-						row.Name = "Booster_" .. booster.Id
-						row.LayoutOrder = rowIndex
-						row.Size = UDim2.new(1, -8, 0, 280)
-						row.BackgroundColor3 = COLORS.Row
-						row.BorderSizePixel = 0
-						row.Parent = list
-						UI.skin(row, "Card")
-						local potion = UI.image(row, "Booster")
-						potion.Position = UDim2.fromScale(0.2, 0.06)
-						potion.Size = UDim2.fromScale(0.6, 0.43)
-						local nameLabel = makeLabel(row, "BoosterName", booster.DisplayName)
-						nameLabel.Position = UDim2.fromScale(0.08, 0.50)
-						nameLabel.Size = UDim2.fromScale(0.84, 0.14)
-						nameLabel.Font = Enum.Font.GothamBold
-						nameLabel.TextColor3 = Color3.fromRGB(booster.Color[1], booster.Color[2], booster.Color[3])
-						local detail = makeLabel(row, "BoosterDetails", string.format("Owned ×%d · %s", count, booster.Effect.Kind))
-						detail.Position = UDim2.fromScale(0.08, 0.66)
-						detail.Size = UDim2.fromScale(0.84, 0.12)
-						detail.TextColor3 = COLORS.Muted
-						local button = makeButton(row, "UseButton", "Use")
-						button.AnchorPoint = Vector2.new(1, 0.5)
-						button.Position = UDim2.fromScale(0.92, 0.89)
-						button.Size = UDim2.fromScale(0.84, 0.16)
-						button.Activated:Connect(function()
-							local response = invoke(useBooster, booster.Id)
-							if response and response.Success then
-								refresh()
-							elseif response then
-								setStatus(response.Reason or "Booster could not be used.", false)
-							end
+						local recyclable = definition.Rollable == true
+						local place = addAction(actions, "PlaceButton", "Place", "Primary", if recyclable then 0.6 else 1, 1)
+						place.Activated:Connect(function()
+							showAreas(definition)
 						end)
-						visibleRowCount += 1
-					end
-				end
-			else
-				subtitle.Text = "Counts include machines installed in your factory."
-				setStatus(string.format("%d machine%s owned across %d type%s.", ownedCount, if ownedCount == 1 then "" else "s", #ids, if #ids == 1 then "" else "s"), nil)
-				local rowIndex = 0
-				local rollPool = MachineDefinitions.getRollPool()
-				for _, section in ipairs(MACHINE_SECTIONS) do
-
-					for _, machineId in ipairs(ids) do
-						local definition = MachineDefinitions.get(machineId)
-						if definition and definition.Category == section.Category and definition.Category == activeCategory then
-							rowIndex += 1
-							local count = available[machineId] or 0
-							local actionText: string? = nil
-							local action: (() -> ())? = nil
-							if definition.Rollable and count > 0 then
-								actionText = "Recycle"
-								action = function()
-									local response = invoke(sellMachine, machineId, 1)
-									if response and response.Success then
-										setStatus(string.format("Recycled one %s.", definition.DisplayName), true)
-										refresh()
-									elseif response then
-										setStatus(response.Reason or "Machine could not be recycled.", false)
-									end
+						if recyclable then
+							local recycle = addAction(actions, "ActionButton", "Recycle", "Secondary", 0.4, 2)
+							confirmable(recycle, "Recycle", function()
+								local response = invoke(sellMachine, machineId, 1)
+								if response and response.Success then
+									setStatus(string.format("Recycled one %s.", definition.DisplayName), true)
+									refresh()
+								elseif response then
+									setStatus(response.Reason or "Machine could not be recycled.", false)
 								end
-							end
-							local odds = if definition.Rollable then EconomyRules.getMachineOddsLabel(machineId, rollPool) else nil
-							local detail = string.format("%s %s · Owned %d · Placed %d · Available %d", definition.Rarity, definition.Category, totals[machineId] or 0, placed[machineId] or 0, count)
-							if odds then detail ..= string.format(" · %s", odds) end
-							local row = makeRow(machineId, rowIndex, false, count, placed[machineId] or 0, totals[machineId] or 0, actionText, count > 0, action, detail)
-							if count > 0 then
-								local place = makeButton(row, "PlaceButton", "Place")
-								UI.asset(place.AmberBackground, "Action")
-								place.TextColor3 = COLORS.Panel
-								place.Position = UDim2.fromScale(0.08, 0.83)
-								place.Size = UDim2.new(if actionText then 0.52 else 0.84, 0, 0, 44)
-								place.Position = UDim2.new(0.08, 0, 1, -54)
-								if actionText then
-									row.ActionButton.Position = UDim2.new(0.61, 0, 1, -54)
-									row.ActionButton.Size = UDim2.new(0.31, 0, 0, 44)
-									row.ActionButton.TextSize = 9
-								end
-								if landscapeCompact then
-									place.Position = UDim2.new(0.43, 0, 1, -54)
-									place.Size = UDim2.new(if actionText then 0.31 else 0.53, 0, 0, 44)
-									if actionText then
-										row.ActionButton.Position = UDim2.new(0.75, 0, 1, -54)
-										row.ActionButton.Size = UDim2.new(0.21, 0, 0, 44)
-									end
-								end
-								place.Activated:Connect(function()
-									mode = "AreaSelection"
-									clearRows(list)
-									title.Text = "Choose area"
-									subtitle.Text = definition.Description
-									for slot = 1, state.SlotCount do
-										if FactoryLayout.expectedCategoryForSlot(slot) == definition.Category then
-											local area = makeButton(list, "Area_" .. slot, FactoryLayout.getAreaLabel(slot))
-											area.LayoutOrder = slot
-											area.Activated:Connect(function() InventoryController.openPlacement(slot) end)
-										end
-									end
-								end)
-							end
-							visibleRowCount += 1
+							end)
 						end
 					end
+					visibleRowCount += 1
 				end
 			end
 		end
 
 		if visibleRowCount == 0 then
-			local empty = makeLabel(list, "EmptyInventory", if mode == "Placement" then "No owned machines of this type available yet." elseif activeTab == "Boosters" then "No boosters collected yet." else "No machines owned yet. Use Roll to get your first machine.")
-			empty.Size = UDim2.new(1, -12, 0, 48)
-			empty.TextColor3 = COLORS.Muted
-			empty.TextSize = 12
-			empty.LayoutOrder = 1
+			empty.Text = if mode == "Placement" then "No owned machines of this type are available yet."
+				elseif activeCategory == "Booster" then "No boosters collected yet. Watch for drops around your island."
+				else "Nothing here yet. Hit Roll to get a free machine."
+			empty.Visible = true
 		end
 	end
 
@@ -657,9 +660,12 @@ function InventoryController.start()
 		end
 		mode = nextMode
 		activeCategory = if category and categoryTabs[category] then category else "Producer"
-		activeTab = if category == "Booster" then "Boosters" else "Machines"
 		targetSlot = if nextMode == "Placement" then slotIndex else nil
-		panel.Visible = true
+		if not panel.Visible then
+			panel.Visible = true
+			panel.Position = panelTarget + UDim2.fromOffset(18, 0)
+			TweenService:Create(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = panelTarget }):Play()
+		end
 		refresh()
 	end
 	closePanel = function()
@@ -673,101 +679,92 @@ function InventoryController.start()
 			openPanel("Inventory", nil)
 		end
 	end)
-	machinesTab.Activated:Connect(function()
-		activeTab = "Machines"
-		activeCategory = "Producer"
-		mode = "Inventory"
-		render()
-	end)
 	for category, button in pairs(categoryTabs) do
-		if category ~= "Producer" and category ~= "Booster" then
-			button.Activated:Connect(function()
-				activeCategory = category
-				activeTab = "Machines"
-				mode = "Inventory"
-				render()
-			end)
-		end
+		button.Activated:Connect(function()
+			activeCategory = category
+			mode = "Inventory"
+			render()
+		end)
 	end
-	boostersTab.Activated:Connect(function()
-		activeTab = "Boosters"
+	backButton.Activated:Connect(function()
 		mode = "Inventory"
+		targetSlot = nil
 		render()
 	end)
 	closeButton.Activated:Connect(function()
 		closePanel()
 	end)
 
-	local camera = workspace.CurrentCamera
-	local function layout(viewportSize: Vector2)
-		if screenGui.AbsoluteSize.X > 0 then viewportSize = screenGui.AbsoluteSize end
-		local metrics = Layout.measure(viewportSize.X, viewportSize.Y)
-		local scale = metrics.Scale
-		local width = metrics.PanelWidth / scale
-		local height = metrics.PanelHeight / scale
-		landscapeCompact = metrics.Landscape
-		panelScale.Scale = scale
-		panel.AnchorPoint = Vector2.new(1, 0)
-		panel.Position = UDim2.new(1, -8, 0, metrics.PanelTop)
-		panel.Size = UDim2.fromOffset(width, height)
-		inventoryButton.AnchorPoint = Vector2.new(0, 1)
-		inventoryButton.Position = UDim2.new(0, 12, 1, -12)
-		inventoryButton.Size = UDim2.fromOffset(metrics.InventoryWidth, metrics.InventoryHeight)
-		local compact = metrics.Compact
-		title.Position = UDim2.fromOffset(if compact then 58 else 76, 12)
-		title.Size = UDim2.new(1, -110, 0, if compact then 34 else 44)
-		title.TextSize = if compact then 22 else 30
-		chest.Position = UDim2.fromOffset(20, 10)
-		chest.Size = UDim2.fromOffset(if compact then 34 else 44, if compact then 34 else 44)
-		closeButton.Position = UDim2.new(1, if compact then -54 else -110, 0, 10)
-		closeButton.Size = UDim2.fromOffset(44, 44)
-		subtitle.Visible = not compact
-		subtitle.Position = UDim2.fromOffset(20, 58)
-		subtitle.Size = UDim2.new(1, -40, 0, 20)
-		status.Position = UDim2.fromOffset(20, if compact then height - 28 else 122)
-		status.Size = UDim2.new(1, -40, 0, 20)
-		status.TextSize = 11
-		for index, key in ipairs({ "Producer", "Processor", "Seller", "Booster" }) do
-			local button = categoryTabs[key]
-			button.Position = UDim2.new((index - 1)/4, 12, 0, if compact then 48 else 80)
-			button.Size = UDim2.new(0.25, -15, 0, 44)
-			button.TextSize = if width < 470 then 10 else 14
-			button.Caption.TextWrapped = false
-			button.Caption.TextScaled = true
-			local limit = button.Caption:FindFirstChildOfClass("UITextSizeConstraint") or Instance.new("UITextSizeConstraint")
-			limit.MinTextSize = 8
-			limit.MaxTextSize = button.TextSize
-			limit.Parent = button.Caption
+	local function layout()
+		local size = screenGui.AbsoluteSize
+		if size.X <= 0 or size.Y <= 0 then
+			return
 		end
-		local listTop = if compact then 98 else 152
-		list.Position = UDim2.fromOffset(18, listTop)
-		list.Size = UDim2.new(1, -36, 1, -listTop - 36)
-		local columns = metrics.Columns
-		local cardWidth = (width - 48 - (columns - 1) * 8) / columns
-		listLayout.CellSize = UDim2.new(1 / columns, -10, 0, if landscapeCompact then 174 else math.max(240, cardWidth * 1.55))
-		if state then render() end
-	end
-	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() layout(screenGui.AbsoluteSize) end)
+		metrics = HudLayout.measure(size.X, size.Y)
+		local s = metrics.Scale
+		touch = math.max(40, Theme.MinTouch / s)
+		cardHeight = if metrics.CardStyle == "Row" then touch + 118 else 250 + touch
 
-	if camera then
-		layout(camera.ViewportSize)
-		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-			if workspace.CurrentCamera then
-				layout(workspace.CurrentCamera.ViewportSize)
+		local button = metrics.Inventory
+		inventoryButton.Position = UDim2.fromOffset(button.X, button.Y)
+		inventoryButton.Size = UDim2.fromOffset(button.W, button.H)
+		local iconSize = math.round(button.H * 0.46)
+		boxIcon.Size = UDim2.fromOffset(iconSize, iconSize)
+		boxIcon.Position = if metrics.InventoryIconOnly then UDim2.new(0.5, -iconSize / 2, 0.5, 0) else UDim2.new(0, 16 * s, 0.5, 0)
+		buttonCaption.Visible = not metrics.InventoryIconOnly
+		buttonCaption.Position = UDim2.new(0, 22 * s + iconSize, 0, 0)
+		buttonCaption.Size = UDim2.new(1, -(30 * s + iconSize), 1, 0)
+		buttonCaption.TextSize = math.round(16 * s)
+
+		local rect = metrics.Panel
+		panelScale.Scale = s
+		panelTarget = UDim2.fromOffset(rect.X, rect.Y)
+		panel.Position = panelTarget
+		local width = rect.W / s
+		local height = rect.H / s
+		panel.Size = UDim2.fromOffset(width, height)
+
+		local pad = 16
+		local closeSize = math.max(40, Theme.MinTouch / s)
+		closeButton.Size = UDim2.fromOffset(closeSize, closeSize)
+		closeButton.Position = UDim2.new(1, -pad - closeSize + 6, 0, 8)
+		local showSubtitle = not metrics.Landscape
+		title.Position = UDim2.fromOffset(pad + 2, 12)
+		title.Size = UDim2.new(1, -pad * 2 - closeSize, 0, 30)
+		subtitle.Visible = showSubtitle
+		subtitle.Position = UDim2.fromOffset(pad + 2, 42)
+		subtitle.Size = UDim2.new(1, -pad * 2 - closeSize, 0, 18)
+		local barTop = if showSubtitle then 70 else 50
+		local barHeight = touch + 8
+		tabBar.Position = UDim2.fromOffset(pad, barTop)
+		tabBar.Size = UDim2.new(1, -pad * 2, 0, barHeight)
+		backButton.Position = UDim2.fromOffset(pad, barTop)
+		backButton.Size = UDim2.new(1, -pad * 2, 0, barHeight)
+		local listTop = barTop + barHeight + 12
+		list.Position = UDim2.fromOffset(pad - 2, listTop)
+		list.Size = UDim2.new(1, -pad * 2 + 6, 1, -listTop - 34)
+		empty.Position = UDim2.fromOffset(pad, listTop + 24)
+		empty.Size = UDim2.new(1, -pad * 2, 0, 48)
+		status.Position = UDim2.new(0, pad + 2, 1, -28)
+		status.Size = UDim2.new(1, -pad * 2, 0, 20)
+		if state and panel.Visible then
+			if mode == "AreaSelection" then
+				setGrid("Areas")
+			else
+				render()
 			end
-		end)
-	else
-		layout(Vector2.new(1024, 768))
+		end
 	end
+	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+	layout()
 
 	presentationEvent.OnClientEvent:Connect(function(eventName: string)
-		if eventName == "InventoryChanged" then
+		if eventName == "InventoryChanged" and mode ~= "AreaSelection" then
 			refresh()
 		end
 	end)
 
 	refresh()
-	openPanel("Inventory", nil)
 end
 
 return InventoryController
