@@ -48,7 +48,13 @@ findDropFunction.OnServerInvoke = function(player)
 	local folder = workspace:WaitForChild("TinyFactoryBoosters", 15)
 	if not folder then return nil end
 	local deadline = os.clock() + 15
+	local nextSpawn = 0
 	repeat
+		-- Drops spawn once a minute; ask for one instead of waiting for the next cycle.
+		if os.clock() >= nextSpawn then
+			nextSpawn = os.clock() + 2
+			LootService.spawnFor(player)
+		end
 		for _, candidate in ipairs(folder:GetChildren()) do
 			if candidate:IsA("BasePart") and candidate:GetAttribute("SourcePlotUserId") == player.UserId
 				and candidate:GetAttribute("Landed") == true then

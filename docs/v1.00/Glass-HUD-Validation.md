@@ -72,9 +72,17 @@ and free rolls still go through the existing validated remotes.
   player's profile before `DataService` ran on the same `PlayerRemoving` signal, so edits
   made after the last 60-second autosave were lost. `DataService` now snapshots state
   before any yield, economy/analytics teardown is deferred like the factory teardown, and
-  layout or capacity changes trigger a save five seconds later.
+  layout or capacity changes trigger a save eight seconds later.
+- **Slot 4 placements:** every save sanitized live state without a `SchemaVersion`, so the
+  legacy migrations ran again and moved a slot-4 machine back to inventory whenever the
+  default Seller sat in slot 5. Live snapshots are now stamped with the current version
+  (`SaveSchema.liveSnapshot`), with a regression test filling slots 2-4.
+- **Session hand-off:** each join gets a unique session ID; a join that finds the save still
+  locked by the previous server retries for up to a minute; shutdown waits for in-flight
+  leave saves.
 - **Floor drops:** one drop per player per minute lands on dry ground anywhere on the map
-  (not on plots, water, roofs or canopies) and despawns after five minutes. Any loaded
+  (only the open platform on plots; never conveyors, machines, lagoon rocks, water, roofs or
+  canopies) and despawns after five minutes. Any loaded
   player can collect a drop; the spawning player only counts toward the per-player cap.
 - **Effect tags (`MachineEffects`):** every machine has a short tag such as `2× All`,
   `1.35× Ice`, `Makes Ice`, `Sells 1.4× Ice` or `Every 5th: 3×`. Tags show as the chip on

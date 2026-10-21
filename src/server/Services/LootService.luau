@@ -134,10 +134,14 @@ local function findMapPosition(): Vector3?
 	local minimumY = IslandWorldConfig.Field.WaterlineY + map.MinAboveWater
 	local maximumY = IslandWorldConfig.Field.MaxTopY + map.MaxAboveFieldTop
 	local exclusions: { Instance } = { getWorldFolder() }
-	local plotsFolder = workspace:FindFirstChild("TinyFactoryPlots")
-	if plotsFolder then
-		table.insert(exclusions, plotsFolder)
+	-- Lagoon rocks sit out in the water where nobody can walk; rays fall through to the
+	-- floor below and are rejected by the waterline check.
+	local world = workspace:FindFirstChild(IslandWorldConfig.MapKey)
+	local rocks = world and world:FindFirstChild("LagoonRocks", true)
+	if rocks then
+		table.insert(exclusions, rocks)
 	end
+	local plotsFolder = workspace:FindFirstChild("TinyFactoryPlots")
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player.Character then
 			table.insert(exclusions, player.Character)
@@ -154,8 +158,11 @@ local function findMapPosition(): Vector3?
 		local angle = random:NextNumber() * math.pi * 2
 		local rayOrigin = Vector3.new(math.cos(angle) * distance, rayConfig.StartHeight, math.sin(angle) * distance)
 		local result = workspace:Raycast(rayOrigin, Vector3.new(0, -rayConfig.Distance, 0), rayParams)
+		-- On a plot only the open platform counts, never the conveyor or machines.
+		local onPlot = result ~= nil and plotsFolder ~= nil and result.Instance:IsDescendantOf(plotsFolder)
 		if result and result.Normal.Y >= rayConfig.MinimumGroundNormalY
-			and result.Position.Y >= minimumY and result.Position.Y <= maximumY then
+			and result.Position.Y >= minimumY and result.Position.Y <= maximumY
+			and (not onPlot or result.Instance.Name == "FactoryPlatform") then
 			return result.Position + Vector3.new(0, fallConfig.LandingHeight, 0)
 		end
 	end
@@ -224,6 +231,11 @@ local function spawnLoot(player: Player)
 	task.delay(BoosterConfig.DespawnAfterSeconds, function()
 		if part.Parent then part:Destroy() end
 	end)
+end
+
+-- Spawns one drop for the player now (respecting caps); used by the Studio smoke test.
+function LootService.spawnFor(player: Player)
+	spawnLoot(player)
 end
 
 local function removePlayerDrops(player: Player)

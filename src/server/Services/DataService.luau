@@ -25,16 +25,18 @@ local sessionStartedAt: { [Player]: number } = {}
 
 local SESSION_LOCK_SECONDS = 300
 -- Layout or capacity edits are saved shortly after they happen, not only on the autosave.
-local CHANGE_SAVE_DELAY_SECONDS = 5
+-- Kept above the data store's one-write-per-key-per-6s limit.
+local CHANGE_SAVE_DELAY_SECONDS = 8
+-- A previous server may still hold the session lock briefly after the player left it.
+local LOCK_RETRY_SECONDS = 5
+local LOCK_RETRY_ATTEMPTS = 12
 local pendingChangeSave: { [Player]: boolean } = {}
 local watchFactoryChanges: (Player) -> ()
 
+-- Unique per join: a quick rejoin to the same server must not share the previous
+-- session's lock while that session's release save is still in flight.
 local function sessionIdFor(player: Player): string
-	local jobId = game.JobId
-	if jobId == "" then
-		jobId = HttpService:GenerateGUID(false)
-	end
-	return `{jobId}:{player.UserId}`
+	return `{game.JobId}:{player.UserId}:{HttpService:GenerateGUID(false)}`
 end
 
 local function keyFor(player: Player): string
@@ -77,8 +79,19 @@ local function loadPlayer(player: Player)
 	sessionIds[player] = sessionId
 	setLoadStatus(player, false, false, nil)
 
-	local now = os.time()
-	local success, loadedData, errorKind = PersistenceSession.acquire(store, keyFor(player), sessionId, now, SESSION_LOCK_SECONDS, SaveSchema.sanitizeForStorage)
+	local success, loadedData, errorKind
+	for attempt = 1, LOCK_RETRY_ATTEMPTS do
+		success, loadedData, errorKind = PersistenceSession.acquire(store, keyFor(player), sessionId, os.time(), SESSION_LOCK_SECONDS, SaveSchema.sanitizeForStorage)
+		if success or errorKind ~= "locked" or attempt == LOCK_RETRY_ATTEMPTS then
+			break
+		end
+		setLoadStatus(player, false, true, "Waiting for your last server to finish saving")
+		task.wait(LOCK_RETRY_SECONDS)
+		if player.Parent ~= Players then
+			sessionIds[player] = nil
+			return
+		end
+	end
 
 	if not success then
 		sessionIds[player] = nil
@@ -117,7 +130,7 @@ local function buildSnapshot(player: Player): { [string]: any }?
 	if not factoryData or not economyData then
 		return nil
 	end
-	return SaveSchema.sanitize({
+	return SaveSchema.sanitize(SaveSchema.liveSnapshot({
 		Coins = factoryData.Coins,
 		Layout = factoryData.Layout,
 		Inventory = factoryData.Inventory,
@@ -126,10 +139,10 @@ local function buildSnapshot(player: Player): { [string]: any }?
 		RollCount = economyData.RollCount,
 		Statistics = factoryData.Statistics,
 		Analytics = AnalyticsService.snapshot(player),
-	})
+	}))
 end
 
-local function savePlayer(player: Player, releaseLock: boolean?)
+local function saveOnce(player: Player, releaseLock: boolean?)
 	-- Snapshot before any yield: on leave, other services tear down per-player state on
 	-- the same PlayerRemoving signal, and a missing piece used to skip the final save.
 	local safeData = buildSnapshot(player)
@@ -143,7 +156,10 @@ local function savePlayer(player: Player, releaseLock: boolean?)
 	savingPlayers[player] = nil
 	if not success then
 		player:SetAttribute("FactoryDataSaveError", if errorKind == "conflict" then "Session ownership changed" else "Data store unavailable")
-		AnalyticsService.record(player, "DataSaveFailure")
+		if player.Parent == Players then
+			-- Recording for a departed player would recreate its analytics entry and leak it.
+			AnalyticsService.record(player, "DataSaveFailure")
+		end
 		warn(`Tiny Factory data save failed for {player.UserId}: {errorKind}`)
 		return
 	end
@@ -153,6 +169,21 @@ local function savePlayer(player: Player, releaseLock: boolean?)
 		loadedPlayers[player] = nil
 		sessionIds[player] = nil
 		sessionStartedAt[player] = nil
+	end
+end
+
+-- Release saves (leave and shutdown) are counted so BindToClose can wait for them.
+local releasingSaves = 0
+local function savePlayer(player: Player, releaseLock: boolean?)
+	if not releaseLock then
+		saveOnce(player, false)
+		return
+	end
+	releasingSaves += 1
+	local ok, failure = pcall(saveOnce, player, true)
+	releasingSaves -= 1
+	if not ok then
+		warn(`Tiny Factory release save errored for {player.UserId}: {failure}`)
 	end
 end
 
@@ -196,7 +227,13 @@ function DataService.start()
 	end)
 	game:BindToClose(function()
 		for _, player in Players:GetPlayers() do
-			savePlayer(player, true)
+			task.spawn(savePlayer, player, true)
+		end
+		-- Also wait for leave saves already in flight: the last player leaving often
+		-- triggers the shutdown after their save has started.
+		local deadline = os.clock() + 25
+		while releasingSaves > 0 and os.clock() < deadline do
+			task.wait(0.25)
 		end
 	end)
 	RunService.Heartbeat:Connect(function(deltaTime)
