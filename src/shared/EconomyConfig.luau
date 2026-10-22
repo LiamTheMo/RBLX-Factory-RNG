@@ -4,7 +4,8 @@ return {
 	RollCooldownSeconds = 3,
 	MaxInventoryMachines = 200,
 	CapacityCosts = { 25, 100 },
-	MaxLuckMultiplier = 2,
+	-- Luck booster (×2) times the maxed Lucky Rolls upgrade (×1.5).
+	MaxLuckMultiplier = 3,
 	MaxSaleValueMultiplier = 10,
 	-- First draw: rarity. Second draw: RollWeight among machines of that rarity.
 	RarityWeights = { Common = 70, Uncommon = 20, Rare = 8, Epic = 1.8, Legendary = 0.2 },

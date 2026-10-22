@@ -9,7 +9,7 @@ for _, size in ipairs(sizes) do
 	local w, h = size[1], size[2]
 	local m = Layout.measure(w, h)
 	local label = `{w}x{h}`
-	local controls = { Coin = m.Coin, Settings = m.Settings, Inventory = m.Inventory, Roll = m.Roll }
+	local controls = { Coin = m.Coin, Settings = m.Settings, Upgrades = m.Upgrades, Inventory = m.Inventory, Roll = m.Roll }
 	for name, rect in pairs(controls) do
 		assert(Layout.inside(rect, w, h), `{name} escapes the safe area at {label}`)
 		assert(Layout.overlaps(rect, m.Panel) == false, `{name} overlaps the inventory panel at {label}`)
@@ -18,16 +18,16 @@ for _, size in ipairs(sizes) do
 	assert(Layout.inside(m.SettingsPanel, w, h), "settings panel escapes the safe area at " .. label)
 	assert(m.Panel.W > 200 and m.Panel.H >= 120, "inventory panel too small at " .. label)
 	assert(m.SettingsPanel.H >= 120, "settings panel too short at " .. label)
-	for _, name in ipairs({ "Coin", "Settings", "Inventory", "Roll" }) do
+	for _, name in ipairs({ "Coin", "Settings", "Upgrades", "Inventory", "Roll" }) do
 		assert(not Layout.overlaps(m.SettingsPanel, controls[name]), `settings panel covers {name} at {label}`)
 	end
-	local names = { "Coin", "Settings", "Inventory", "Roll" }
+	local names = { "Coin", "Settings", "Upgrades", "Inventory", "Roll" }
 	for i = 1, #names do
 		for j = i + 1, #names do
 			assert(not Layout.overlaps(controls[names[i]], controls[names[j]]), `{names[i]} overlaps {names[j]} at {label}`)
 		end
 	end
-	for _, name in ipairs({ "Settings", "Inventory", "Roll" }) do
+	for _, name in ipairs({ "Settings", "Upgrades", "Inventory", "Roll" }) do
 		assert(controls[name].H >= 44 and controls[name].W >= 44, `{name} below the 44px touch target at {label}`)
 	end
 	assert(m.Roll.W >= 160, "roll button too narrow at " .. label)

@@ -16,6 +16,7 @@ local HudLayout = require(Shared:WaitForChild("HudLayout"))
 local ModelBuilder = require(Shared:WaitForChild("MachineModelBuilder"))
 local MachineEffects = require(Shared:WaitForChild("MachineEffects"))
 local MachineModifiers = require(Shared:WaitForChild("MachineModifiers"))
+local NumberFormatter = require(Shared:WaitForChild("NumberFormatter"))
 
 local GlassUI = require(script.Parent.GlassUI)
 
@@ -136,6 +137,11 @@ function InventoryController.start()
 	title.TextTruncate = Enum.TextTruncate.AtEnd
 	local subtitle = GlassUI.label(panel, "Subtitle", "", 12)
 	subtitle.TextColor3 = C.Muted
+	-- Machines owned (stored, against the inventory cap), next to the title in every tab.
+	local ownedLabel = GlassUI.label(panel, "OwnedMachines", "", 12, Theme.Fonts.Bold)
+	ownedLabel.TextXAlignment = Enum.TextXAlignment.Right
+	ownedLabel.TextWrapped = false
+	ownedLabel.TextColor3 = C.Accent
 
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "CloseButton"
@@ -439,10 +445,16 @@ function InventoryController.start()
 			if role then
 				GlassUI.chip(badges, "Role", string.upper(role.Name), GlassUI.fromRgb(role.Color), 11).LayoutOrder = 0
 			end
+			if definition.Category == "Producer" and definition.OutputValue then
+				-- Base value of each cube this dropper makes (modifiers included), and how often.
+				local value = definition.OutputValue
+				local valueText = if value < 1000 then MachineEffects.number(value) else NumberFormatter.format(value)
+				GlassUI.chip(badges, "BaseValue", `VALUE {valueText} · {MachineEffects.number(definition.SpawnInterval or 1)}s`, C.Coin, 10).LayoutOrder = 1
+			end
 			for order, modifierId in ipairs(definition.Modifiers or {}) do
 				local modifier = MachineModifiers.get(modifierId)
 				if modifier then
-					GlassUI.chip(badges, modifier.Id, string.upper(modifier.DisplayName), GlassUI.fromRgb(modifier.Color), 10).LayoutOrder = order
+					GlassUI.chip(badges, modifier.Id, string.upper(modifier.DisplayName), GlassUI.fromRgb(modifier.Color), 10).LayoutOrder = 1 + order
 				end
 			end
 		end
@@ -527,11 +539,12 @@ function InventoryController.start()
 			setStatus("Waiting for the factory to load...", nil)
 			return
 		end
-		local inventoryMode = mode == "Inventory"
-		tabBar.Visible = inventoryMode
-		backButton.Visible = not inventoryMode
+		-- Tabs stay up while placing: a machine tab moves the placement to a matching slot.
+		tabBar.Visible = true
+		backButton.Visible = false
+		local highlighted = if mode == "Placement" and targetSlot then FactoryLayout.expectedCategoryForSlot(targetSlot) else activeCategory
 		for category, button in pairs(categoryTabs) do
-			GlassUI.setStyle(button, if category == activeCategory then "Selected" else "Ghost")
+			GlassUI.setStyle(button, if category == highlighted then "Selected" else "Ghost")
 		end
 		setGrid()
 
@@ -541,6 +554,11 @@ function InventoryController.start()
 			ownedCount += count
 		end
 		inventoryButton:SetAttribute("OwnedCount", ownedCount)
+		local storedCount = 0
+		for _, count in pairs(available) do
+			storedCount += count
+		end
+		ownedLabel.Text = `Owned {storedCount}/{EconomyConfig.MaxInventoryMachines}`
 		countBadge.Text = if ownedCount > 99 then "99+" else tostring(ownedCount)
 		countBadge.Visible = ownedCount > 0
 		if lastOwned and ownedCount > lastOwned and buttonScale then
@@ -705,10 +723,49 @@ function InventoryController.start()
 			openPanel("Inventory", nil)
 		end
 	end)
+	-- Slot a machine tab places into: droppers in area 1, sellers in the bay, upgraders in
+	-- the current upgrader area or the first open unlocked one.
+	local function placementSlotFor(category: string): number?
+		if category == "Producer" or category == "Seller" then
+			for slotIndex = 1, FactoryLayout.SlotCount do
+				if FactoryLayout.expectedCategoryForSlot(slotIndex) == category then
+					return slotIndex
+				end
+			end
+			return nil
+		end
+		if category ~= "Processor" then
+			return nil
+		end
+		if targetSlot and FactoryLayout.expectedCategoryForSlot(targetSlot) == "Processor" then
+			return targetSlot
+		end
+		local layout = normalizeLayout()
+		local capacity = state and state.Capacity or 1
+		local firstUnlocked: number? = nil
+		for slotIndex = 1, FactoryLayout.SlotCount do
+			if FactoryLayout.expectedCategoryForSlot(slotIndex) == "Processor" and PlacementRules.isSlotUnlocked(slotIndex, capacity) then
+				firstUnlocked = firstUnlocked or slotIndex
+				if not layout[slotIndex] then
+					return slotIndex
+				end
+			end
+		end
+		return firstUnlocked
+	end
+
 	for category, button in pairs(categoryTabs) do
 		button.Activated:Connect(function()
+			-- While placing, a machine tab retargets the placement; tapping the tab that is
+			-- already selected goes back to browsing that category's inventory.
+			local current = if mode == "Placement" and targetSlot then FactoryLayout.expectedCategoryForSlot(targetSlot) else nil
+			local slot = if mode == "Placement" and category ~= current then placementSlotFor(category) else nil
 			activeCategory = category
-			mode = "Inventory"
+			if slot then
+				targetSlot = slot
+			else
+				mode = "Inventory"
+			end
 			announceTarget()
 			render()
 		end)
@@ -757,8 +814,11 @@ function InventoryController.start()
 		closeButton.Size = UDim2.fromOffset(closeSize, closeSize)
 		closeButton.Position = UDim2.new(1, -pad - closeSize + 6, 0, 8)
 		local showSubtitle = not metrics.Landscape
+		local ownedWidth = 110
 		title.Position = UDim2.fromOffset(pad + 2, 12)
-		title.Size = UDim2.new(1, -pad * 2 - closeSize, 0, 30)
+		title.Size = UDim2.new(1, -pad * 2 - closeSize - ownedWidth, 0, 30)
+		ownedLabel.Position = UDim2.new(1, -pad - closeSize - ownedWidth + 6, 0, 12)
+		ownedLabel.Size = UDim2.fromOffset(ownedWidth - 8, 30)
 		subtitle.Visible = showSubtitle
 		subtitle.Position = UDim2.fromOffset(pad + 2, 42)
 		subtitle.Size = UDim2.new(1, -pad * 2 - closeSize, 0, 18)

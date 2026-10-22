@@ -224,7 +224,7 @@ local function dot(parent: Instance, name: string, position: UDim2, size: UDim2,
 	return frame
 end
 
--- Simple vector icons drawn from frames. `kind` is Coin, Dice, Box, Sliders or Close.
+-- Simple vector icons drawn from frames. `kind` is Coin, Dice, Box, Sliders, Arrow or Close.
 function GlassUI.icon(parent: Instance, kind: string, color: Color3?): Frame
 	local holder = Instance.new("Frame")
 	holder.Name = kind .. "Icon"
@@ -295,6 +295,29 @@ function GlassUI.icon(parent: Instance, kind: string, color: Color3?): Frame
 			track.Parent = holder
 			dot(holder, "Knob" .. index, UDim2.fromScale(knob, y), UDim2.fromScale(0.24, 0.24), tint)
 		end
+	elseif kind == "Arrow" then
+		-- Upgrade arrow: a chevron over a stem.
+		for index, rotation in ipairs({ 45, -45 }) do
+			local wing = Instance.new("Frame")
+			wing.Name = "Wing" .. index
+			wing.AnchorPoint = Vector2.new(0.5, 0.5)
+			wing.Position = UDim2.fromScale(if index == 1 then 0.36 else 0.64, 0.34)
+			wing.Size = UDim2.fromScale(0.5, 0.16)
+			wing.Rotation = -rotation
+			wing.BackgroundColor3 = tint
+			wing.BorderSizePixel = 0
+			GlassUI.round(wing)
+			wing.Parent = holder
+		end
+		local stem = Instance.new("Frame")
+		stem.Name = "Stem"
+		stem.AnchorPoint = Vector2.new(0.5, 0)
+		stem.Position = UDim2.fromScale(0.5, 0.3)
+		stem.Size = UDim2.fromScale(0.16, 0.62)
+		stem.BackgroundColor3 = tint
+		stem.BorderSizePixel = 0
+		GlassUI.round(stem)
+		stem.Parent = holder
 	elseif kind == "Close" then
 		for index, rotation in ipairs({ 45, -45 }) do
 			local bar = Instance.new("Frame")
@@ -311,6 +334,28 @@ function GlassUI.icon(parent: Instance, kind: string, color: Color3?): Frame
 	end
 	holder.Parent = parent
 	return holder
+end
+
+-- Single-line glass text field.
+function GlassUI.input(parent: Instance, name: string, placeholder: string, size: number?): TextBox
+	local box = Instance.new("TextBox")
+	box.Name = name
+	box.Text = ""
+	box.PlaceholderText = placeholder
+	box.PlaceholderColor3 = C.Muted
+	box.TextColor3 = C.Text
+	box.FontFace = Theme.Fonts.Bold
+	box.TextSize = size or 14
+	box.TextXAlignment = Enum.TextXAlignment.Left
+	box.ClearTextOnFocus = false
+	box.BackgroundColor3 = C.Stroke
+	box.BackgroundTransparency = 0.92
+	box.BorderSizePixel = 0
+	GlassUI.corner(box, Theme.Radius.Button)
+	GlassUI.stroke(box)
+	GlassUI.padding(box, 12, 0)
+	box.Parent = parent
+	return box
 end
 
 -- Compact rounded tag, e.g. a rarity or booster chip. Width follows the text.

@@ -12,6 +12,8 @@ local FactoryLayout = requireSibling("FactoryLayout")
 local MachineDefinitions = requireSibling("MachineDefinitions")
 local PlacementRules = requireSibling("PlacementRules")
 local BoosterRules = requireSibling("BoosterRules")
+local UpgradeRules = requireSibling("UpgradeRules")
+local EconomyRules = requireSibling("EconomyRules")
 
 local SaveSchema = {}
 SaveSchema.CurrentVersion = 4
@@ -25,6 +27,10 @@ local function defaultData(): { [string]: any }
 		Layout = FactoryLayout.copy(FactoryLayout.Default),
 		Capacity = 1,
 		RollCount = 0,
+		-- Permanent Coin upgrades (UpgradeRules) and player settings; optional, so older
+		-- saves load with no upgrades and auto-recycle off.
+		Upgrades = {},
+		Settings = { AutoRecycleBelow = 0 },
 		Statistics = {},
 		Analytics = {},
 	}
@@ -154,6 +160,10 @@ function SaveSchema.sanitize(raw: any): { [string]: any }
 	end
 
 	safe.BoosterInventory = BoosterRules.sanitizeInventory(source.BoosterInventory)
+	safe.Upgrades = UpgradeRules.sanitize(source.Upgrades)
+	if type(source.Settings) == "table" then
+		safe.Settings.AutoRecycleBelow = EconomyRules.sanitizeAutoRecycle(source.Settings.AutoRecycleBelow)
+	end
 
 	if type(source.Layout) == "table" then
 		local candidate = {}

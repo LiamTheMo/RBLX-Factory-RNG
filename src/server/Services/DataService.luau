@@ -137,6 +137,8 @@ local function buildSnapshot(player: Player): { [string]: any }?
 		BoosterInventory = factoryData.BoosterInventory,
 		Capacity = factoryData.Capacity,
 		RollCount = economyData.RollCount,
+		Upgrades = economyData.Upgrades,
+		Settings = economyData.Settings,
 		Statistics = factoryData.Statistics,
 		Analytics = AnalyticsService.snapshot(player),
 	}))
@@ -188,7 +190,7 @@ local function savePlayer(player: Player, releaseLock: boolean?)
 end
 
 watchFactoryChanges = function(player: Player)
-	for _, attribute in ipairs({ "FactoryLayout", "FactoryCapacity" }) do
+	for _, attribute in ipairs({ "FactoryLayout", "FactoryCapacity", "FactoryEconomyRevision" }) do
 		player:GetAttributeChangedSignal(attribute):Connect(function()
 			if pendingChangeSave[player] or not loadedPlayers[player] then
 				return

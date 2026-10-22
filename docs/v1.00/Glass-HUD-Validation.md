@@ -128,6 +128,19 @@ and free rolls still go through the existing validated remotes.
 - **Inventory tag check:** the Studio smoke harness grants `ValueMultiplier+Golden` and asserts the
   card's GOLDEN tag, its "Golden Value Multiplier" name and its modified odds.
 
+## Round 8: upgrades, settings and inventory
+
+- **Upgrades button** beside Settings opens an Upgrades popover: factory slots (moved from the old
+  Factory/Settings popover) plus Lucky Rolls, Better Prices and Quick Rolls (see Economy Design §
+  Upgrades and auto-recycle). Levels save with the player.
+- **Settings** keeps save status and machines owned, and adds auto-recycle: type odds such as
+  `1/1000` (or press Off). Rolls more common than that are recycled; the reveal says so.
+- **Inventory:** dropper cards show a `VALUE n · ts` badge (base cube value, modifiers included,
+  and drop interval); the header shows `Owned n/200`; the tab bar stays visible while placing,
+  and a machine tab moves the placement to a matching area (Droppers → area 1, Sellers → seller
+  bay, Upgraders → the current or first open upgrader area; Boosters returns to the inventory).
+  Tapping the already-selected tab while placing goes back to browsing that category.
+
 ## Completed / Passed
 
 - Luau compilation, all pure Luau suites (including the new layout spec across eleven
@@ -163,6 +176,10 @@ and free rolls still go through the existing validated remotes.
 - Round 4 live check: place a machine and leave within a few seconds, rejoin, and confirm
   it stayed; watch drops appear around the map about once a minute per player; read the
   effect tags on cards, the roll result and placed machines.
+
+- Round 8 live check: restart servers after deploy (old servers drop upgrade levels and settings
+  they don't know). Buy each upgrade, rejoin and confirm levels stay; set auto-recycle to 1/1000
+  and roll; switch tabs while placing on desktop and phone; read dropper value badges.
 
 - Round 7 live check: after deploying, restart running servers (servers still on the old code
   drop modified machines they don't recognise). Roll until a Golden machine appears (or

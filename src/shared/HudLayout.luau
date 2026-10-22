@@ -13,6 +13,8 @@ export type Metrics = {
 	Margin: number,
 	Coin: Rect,
 	Settings: Rect,
+	-- Upgrades button beside Settings; its popover reuses SettingsPanel (one opens at a time).
+	Upgrades: Rect,
 	Inventory: Rect,
 	InventoryIconOnly: boolean,
 	Roll: Rect,
@@ -61,6 +63,9 @@ function HudLayout.measure(width: number, height: number): Metrics
 	local settings = if landscape
 		then rect(coin.X + coin.W + 8, MARGIN, settingsSize, settingsSize)
 		else rect(width - MARGIN - settingsSize, MARGIN, settingsSize, settingsSize)
+	local upgrades = if landscape
+		then rect(settings.X + settings.W + 8, MARGIN, settingsSize, settingsSize)
+		else rect(settings.X - 8 - settingsSize, MARGIN, settingsSize, settingsSize)
 
 	local iconOnly = compact
 	local inventoryDesign = if iconOnly then DESIGN.InventoryIcon else DESIGN.Inventory
@@ -106,6 +111,7 @@ function HudLayout.measure(width: number, height: number): Metrics
 		Margin = MARGIN,
 		Coin = coin,
 		Settings = settings,
+		Upgrades = upgrades,
 		Inventory = inventory,
 		InventoryIconOnly = iconOnly,
 		Roll = roll,
