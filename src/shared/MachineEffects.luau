@@ -21,7 +21,7 @@ MachineEffects.Roles = table.freeze({
 	Producer = table.freeze({ Name = "Dropper", Color = table.freeze({ 92, 172, 255 }) }),
 	Processor = table.freeze({ Name = "Upgrader", Color = table.freeze({ 255, 120, 196 }) }),
 	Seller = table.freeze({ Name = "Seller", Color = table.freeze({ 96, 214, 128 }) }),
-})
+} :: { [string]: Role })
 
 function MachineEffects.role(definition: any): Role?
 	if type(definition) ~= "table" then
