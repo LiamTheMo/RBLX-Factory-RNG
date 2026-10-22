@@ -41,6 +41,10 @@ grantFunction.OnServerInvoke = function(player, grantKind)
 		factory.inventory.Seller = (factory.inventory.Seller or 0) + 1
 		return true
 	end
+	if grantKind == "GoldenMachine" then
+		factory.inventory["ValueMultiplier+Golden"] = (factory.inventory["ValueMultiplier+Golden"] or 0) + 1
+		return true
+	end
 	return factory.simulation:grantCoins(1000)
 end
 
@@ -325,6 +329,18 @@ local success, message = pcall(function()
 	task.wait(0.1)
 	local sellerRow = inventoryHud.MachinePanel.MachineList:FindFirstChild("Owned_Seller")
 	assert(sellerRow and sellerRow:FindFirstChild("MachineDetails"), "owned inventory omitted the Seller")
+	-- Modified machines carry their modifier as a tag on the inventory card.
+	assert(grantFunction:InvokeServer("GoldenMachine"), "test Golden machine grant failed")
+	task.wait(0.15)
+	inventoryController.openInventory("Processor")
+	task.wait(0.1)
+	local goldenRow = inventoryHud.MachinePanel.MachineList:FindFirstChild("Owned_ValueMultiplier+Golden")
+	assert(goldenRow, "owned inventory omitted the Golden machine")
+	local goldenTag = goldenRow:FindFirstChild("Golden", true)
+	assert(goldenTag and goldenTag:FindFirstChild("Text") and goldenTag.Text.Text == "GOLDEN", "Golden machine card is missing its modifier tag")
+	assert(goldenRow.MachineName.Text == "Golden Value Multiplier", "Golden machine card should be named after its modifier")
+	local goldenOdds = economyRules.getMachineOddsLabel("ValueMultiplier+Golden", definition.getRollPool())
+	assert(goldenOdds and goldenRow.RollOdds.Text:find(goldenOdds, 1, true), "Golden machine card should show odds including the modifier")
 	for _, tab in ipairs({ "ProducerTab", "ProcessorTab", "SellerTab", "BoosterTab" }) do
 		assert(inventoryHud.MachinePanel.TabBar:FindFirstChild(tab), "inventory category tab missing: " .. tab)
 	end
