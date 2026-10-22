@@ -131,8 +131,8 @@ local function findMapPosition(): Vector3?
 	local map = BoosterConfig.MapSpawn
 	local rayConfig = BoosterConfig.LandRaycast
 	local fallConfig = BoosterConfig.Fall
-	local minimumY = IslandWorldConfig.Field.WaterlineY + map.MinAboveWater
-	local maximumY = IslandWorldConfig.Field.MaxTopY + map.MaxAboveFieldTop
+	local minimumY = IslandWorldConfig.Lagoon.WaterlineY + map.MinAboveWater
+	local maximumY = IslandWorldConfig.Lagoon.MaxTopY + map.MaxAboveFieldTop
 	local exclusions: { Instance } = { getWorldFolder() }
 	-- Lagoon rocks sit out in the water where nobody can walk; rays fall through to the
 	-- floor below and are rejected by the waterline check.

@@ -66,4 +66,13 @@ assert(Surface.Layers[1].OuterTransparency == 0, "beyond the floor the base wate
 assert(Surface.Layers[1].Transparency > 0 and Surface.Layers[1].Transparency < 0.5, "over the lagoon floor the water is slightly see-through")
 assert(Surface.MaxPartSize * 2 >= Config.Water.Size and Config.Water.Size % Surface.MaxPartSize == 0,
 	"the floor area lines up with whole surface parts, so see-through parts always have floor under them")
+
+-- Foam: white with the rim denser than the surf, and a bounded, gentle, unsynchronised swell.
+local Foam = Config.Foam
+assert(Foam.RimTransparency >= 0 and Foam.RimTransparency < Foam.SurfTransparency and Foam.SurfTransparency < 1,
+	"foam rim is denser than the surf and both stay visible")
+assert(Foam.SwellStuds > 0 and Foam.SwellStuds <= 1.5, "the surf swell stays gentle")
+assert(Foam.SwellSeconds[1] > 0 and Foam.SwellSeconds[1] < Foam.SwellSeconds[2], "surf periods vary per part")
+assert(Foam.MaxAnimated > 0 and Foam.MaxAnimated <= 600, "surf animation is bounded")
+assert(Config.Water.Surface.Drop >= 0.3, "the water surface sits clearly under the foam, so they never depth-fight")
 print("Island allocation, layout and isolation tests passed")
