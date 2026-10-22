@@ -39,7 +39,8 @@ local snapshot = simulation:getSnapshot()
 expect(snapshot.ProducedItems == 3, "expected three produced items after two seconds")
 expect(snapshot.SoldItems == 2, "expected two items to reach the seller")
 expect(snapshot.Coins == 4, "the multiplier should double each sold item value")
-expect(snapshot.ProcessedItems == 2, "expected two processed items")
+-- Machines act as a cube reaches them, so the third cube has already passed the multiplier.
+expect(snapshot.ProcessedItems == 3, "expected three processed items")
 expect(snapshot.ActiveItems == 1, "the third item should still be in the route")
 
 local capped = FactorySimulation.new({

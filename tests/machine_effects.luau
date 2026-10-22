@@ -23,7 +23,10 @@ expect(tag("LuckyTill") == "12.5%: 1.5× sale", "chance sellers show their odds"
 expect(tag("RainbowExchange") == "Sells 1.5× Epic+", "rarity sellers show the threshold")
 expect(tag("BulkBooth") == "Sells 1.15× 20+", "conditional sellers show the value floor")
 expect(tag("Seller") == "Sells 1×", "the default seller is labelled")
-expect(tag("ConveyorBooster") == "2× Speed", "throughput machines show their speedup")
+expect(tag("ConveyorBooster") == "1.2× All · Fast", "throughput machines show their value bonus")
+expect(tag("Giantifier") == "1.5× All · Big", "the size machine shows its value bonus")
+expect(tag("PaintMachine") == "1.25× All · Paint", "the paint machine shows its value bonus")
+expect(tag("LuckyModifier") == "3× or 0.5× All", "the alternating modifier shows both outcomes")
 expect(tag("LuckyLantern") == "10%: 2× All", "chance upgraders show their odds")
 
 for id, definition in pairs(MachineDefinitions.all()) do

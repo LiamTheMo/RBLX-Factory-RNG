@@ -6,9 +6,9 @@ Generated from shared definitions with `luau scripts/catalog_report.luau`. Base 
 
 | Machine / stable ID | Category | Weight | Base odds (1/x) | Stats and behavior |
 | --- | --- | ---: | ---: | --- |
-| Cooldown Tuner / CooldownTuner | Processor | 2 | 65.00 | Provides a smaller, reliable throughput improvement. |
-| Giantifier / Giantifier | Processor | 2 | 65.00 | Makes the item visibly larger. |
-| Paint Machine / PaintMachine | Processor | 2 | 65.00 | Paints the item for later visual combinations. |
+| Cooldown Tuner / CooldownTuner | Processor | 2 | 65.00 | Nudges cubes along a little faster and adds 1.1× value. |
+| Giantifier / Giantifier | Processor | 2 | 65.00 | Makes cubes 1.8× bigger and worth 1.5× more. |
+| Paint Machine / PaintMachine | Processor | 2 | 65.00 | Paints cubes pink; painted cubes are worth 1.25× more. |
 | Polished Roller / PolishedRoller | Processor | 5 | 26.00 | Adds a small value bonus to every cube. |
 | Value Multiplier / ValueMultiplier | Processor | 3 | 43.33 | Doubles an item's value. |
 | Coconut Crank / CoconutCrank | Producer | 4 | 32.50 | Standard; 5 base Coins; every 1.6s; type multiplier x1 |
@@ -34,7 +34,7 @@ Generated from shared definitions with `luau scripts/catalog_report.luau`. Base 
 | --- | --- | ---: | ---: | --- |
 | Breezy Bumper / BreezyBumper | Processor | 3 | 106.67 | Adds value to Air cubes only. |
 | Compound Press / CompoundPress | Processor | 2 | 160.00 | Compresses an item into a higher-value form. |
-| Conveyor Booster / ConveyorBooster | Processor | 2 | 160.00 | Speeds an item through downstream slots. |
+| Conveyor Booster / ConveyorBooster | Processor | 2 | 160.00 | Rushes cubes to the next machine and adds 1.2× value. |
 | Moss Mixer / MossMixer | Processor | 3 | 106.67 | Adds value to Nature cubes only. |
 | Rain Rinse / RainRinse | Processor | 3 | 106.67 | Adds value to Wet cubes only. |
 | Breeze Bell / BreezeBell | Producer | 5 | 64.00 | Air; 5 base Coins; every 1.25s; type multiplier x1.1 |
@@ -107,7 +107,7 @@ Generated from shared definitions with `luau scripts/catalog_report.luau`. Base 
 
 | Machine / stable ID | Category | Weight | Base odds (1/x) | Stats and behavior |
 | --- | --- | ---: | ---: | --- |
-| Lucky Modifier / LuckyModifier | Processor | 1 | 12000.00 | Alternates between bounded high and low value outcomes. |
+| Lucky Modifier / LuckyModifier | Processor | 1 | 12000.00 | Every other cube is worth 3×; the rest are worth 0.5×. |
 | Rainbow Refractor / RainbowRefractor | Processor | 1 | 12000.00 | Further enhances Rainbow cubes. |
 | Aurora Engine / AuroraEngine | Producer | 2 | 6000.00 | Rainbow; 4 base Coins; every 2.6s; type multiplier x2.5 |
 | Chrono Cathedral / ChronoCathedral | Producer | 2 | 6000.00 | Time; 14 base Coins; every 5.2s; type multiplier x1.8 |
