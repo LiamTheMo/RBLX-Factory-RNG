@@ -8,6 +8,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local NumberFormatter = require(Shared:WaitForChild("NumberFormatter"))
 local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
 local HudLayout = require(Shared:WaitForChild("HudLayout"))
+local EconomyRules = require(Shared:WaitForChild("EconomyRules"))
+local UpgradeRules = require(Shared:WaitForChild("UpgradeRules"))
 
 local EffectsController = require(script.Parent.EffectsController)
 local InventoryController = require(script.Parent.InventoryController)
@@ -57,6 +59,8 @@ function EconomyController.start()
 	local getState = remotes:WaitForChild("GetEconomyState") :: RemoteFunction
 	local rollMachine = remotes:WaitForChild("RollMachine") :: RemoteFunction
 	local buyCapacity = remotes:WaitForChild("BuyCapacity") :: RemoteFunction
+	local buyUpgrade = remotes:WaitForChild("BuyUpgrade") :: RemoteFunction
+	local setAutoRecycle = remotes:WaitForChild("SetAutoRecycle") :: RemoteFunction
 	local presentationEvent = remotes:WaitForChild("PresentationEvent") :: RemoteEvent
 
 	local screenGui = GlassUI.screen(playerGui, "EconomyHud", 10)
@@ -132,65 +136,148 @@ function EconomyController.start()
 	hint.TextTransparency = 0.25
 	hint.ZIndex = 2
 
-	-- Settings button and its popover, top right.
-	local settings = GlassUI.button(settingsGui, "Settings", "", "Secondary")
-	settings:SetAttribute("GlassBaseTransparency", Theme.Transparency.Glass)
-	GlassUI.setStyle(settings, "Secondary")
-	settings.BackgroundColor3 = C.Glass
-	GlassUI.setRadius(settings, 14)
-	local settingsIcon = GlassUI.icon(settings, "Sliders")
-	settingsIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-	settingsIcon.Position = UDim2.fromScale(0.5, 0.5)
-	settingsIcon.Size = UDim2.fromScale(0.5, 0.5)
+	-- Settings and Upgrades buttons, top right; each opens a popover in the same spot.
+	local function topButton(name: string, iconKind: string): TextButton
+		local button = GlassUI.button(settingsGui, name, "", "Secondary")
+		button:SetAttribute("GlassBaseTransparency", Theme.Transparency.Glass)
+		GlassUI.setStyle(button, "Secondary")
+		button.BackgroundColor3 = C.Glass
+		GlassUI.setRadius(button, 14)
+		local icon = GlassUI.icon(button, iconKind)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.Position = UDim2.fromScale(0.5, 0.5)
+		icon.Size = UDim2.fromScale(0.5, 0.5)
+		return button
+	end
+	local settings = topButton("Settings", "Sliders")
+	local upgradesButton = topButton("UpgradesButton", "Arrow")
 
-	local panel = GlassUI.glass(settingsGui, "EconomyPanel")
-	panel.Visible = false
-	local panelScale = Instance.new("UIScale")
-	panelScale.Parent = panel
-	local body = Instance.new("ScrollingFrame")
-	body.Name = "Body"
-	body.BackgroundTransparency = 1
-	body.BorderSizePixel = 0
-	body.Size = UDim2.fromScale(1, 1)
-	body.CanvasSize = UDim2.new()
-	body.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	body.ScrollingDirection = Enum.ScrollingDirection.Y
-	body.ScrollBarThickness = 3
-	body.ScrollBarImageColor3 = C.Muted
-	body.Parent = panel
-	GlassUI.padding(body, 16, 14)
-	local bodyList = Instance.new("UIListLayout")
-	bodyList.Padding = UDim.new(0, 8)
-	bodyList.SortOrder = Enum.SortOrder.LayoutOrder
-	bodyList.Parent = body
+	local function popover(name: string, heading: string, caption: string): (Frame, ScrollingFrame, UIScale)
+		local frame = GlassUI.glass(settingsGui, name)
+		frame.Visible = false
+		local scale = Instance.new("UIScale")
+		scale.Parent = frame
+		local scroller = Instance.new("ScrollingFrame")
+		scroller.Name = "Body"
+		scroller.BackgroundTransparency = 1
+		scroller.BorderSizePixel = 0
+		scroller.Size = UDim2.fromScale(1, 1)
+		scroller.CanvasSize = UDim2.new()
+		scroller.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		scroller.ScrollingDirection = Enum.ScrollingDirection.Y
+		scroller.ScrollBarThickness = 3
+		scroller.ScrollBarImageColor3 = C.Muted
+		scroller.Parent = frame
+		GlassUI.padding(scroller, 16, 14)
+		local list = Instance.new("UIListLayout")
+		list.Padding = UDim.new(0, 8)
+		list.SortOrder = Enum.SortOrder.LayoutOrder
+		list.Parent = scroller
+		local titleLabel = GlassUI.label(scroller, "Title", heading, 18, Theme.Fonts.Heavy)
+		titleLabel.LayoutOrder = 1
+		titleLabel.Size = UDim2.new(1, 0, 0, 24)
+		local captionLabel = GlassUI.label(scroller, "Subtitle", caption, 12)
+		captionLabel.LayoutOrder = 2
+		captionLabel.Size = UDim2.new(1, 0, 0, 30)
+		captionLabel.TextColor3 = C.Muted
+		captionLabel.TextYAlignment = Enum.TextYAlignment.Top
+		return frame, scroller, scale
+	end
 
-	local title = GlassUI.label(body, "Title", "Factory", 18, Theme.Fonts.Heavy)
-	title.LayoutOrder = 1
-	title.Size = UDim2.new(1, 0, 0, 24)
-	local subtitle = GlassUI.label(body, "Subtitle", "Rolls are free. Production funds capacity.", 12)
-	subtitle.LayoutOrder = 2
-	subtitle.Size = UDim2.new(1, 0, 0, 18)
-	subtitle.TextColor3 = C.Muted
-	local slotsValue = statRow(body, "Slots", "Factory slots", 3)
+	-- Settings: save state, machine count and auto-recycle.
+	local panel, body, panelScale = popover("EconomyPanel", "Settings", "Your factory saves automatically.")
+	local saveValue = statRow(body, "Save", "Save", 3)
 	local machinesValue = statRow(body, "Machines", "Machines owned", 4)
-	local saveValue = statRow(body, "Save", "Save", 5)
-	local capacity = GlassUI.button(body, "Capacity", "Expand capacity", "Primary", 14)
-	capacity.LayoutOrder = 6
-	capacity.Size = UDim2.new(1, 0, 0, 46)
+	local recycleTitle = GlassUI.label(body, "AutoRecycleTitle", "Auto-recycle", 14, Theme.Fonts.Bold)
+	recycleTitle.LayoutOrder = 5
+	recycleTitle.Size = UDim2.new(1, 0, 0, 20)
+	local recycleHelp = GlassUI.label(body, "AutoRecycleHelp", "Rolls more common than these odds are recycled instead of kept. Example: 1/1000.", 11)
+	recycleHelp.LayoutOrder = 6
+	recycleHelp.Size = UDim2.new(1, 0, 0, 30)
+	recycleHelp.TextColor3 = C.Muted
+	recycleHelp.TextYAlignment = Enum.TextYAlignment.Top
+	local recycleRow = Instance.new("Frame")
+	recycleRow.Name = "AutoRecycleRow"
+	recycleRow.LayoutOrder = 7
+	recycleRow.BackgroundTransparency = 1
+	recycleRow.Size = UDim2.new(1, 0, 0, 46)
+	recycleRow.Parent = body
+	local recycleInput = GlassUI.input(recycleRow, "AutoRecycleInput", "1/1000 or Off", 14)
+	recycleInput.Size = UDim2.new(0.5, -6, 1, 0)
+	local recycleSave = GlassUI.button(recycleRow, "AutoRecycleSave", "Save", "Primary", 14)
+	recycleSave.Position = UDim2.new(0.5, 0, 0, 0)
+	recycleSave.Size = UDim2.new(0.25, -4, 1, 0)
+	local recycleOff = GlassUI.button(recycleRow, "AutoRecycleOff", "Off", "Secondary", 14)
+	recycleOff.Position = UDim2.new(0.75, 2, 0, 0)
+	recycleOff.Size = UDim2.new(0.25, -2, 1, 0)
+	local recycleValue = statRow(body, "AutoRecycle", "Recycling below", 8)
 	local status = GlassUI.label(body, "EconomyStatus", "", 12)
-	status.LayoutOrder = 7
+	status.LayoutOrder = 20
 	status.Size = UDim2.new(1, 0, 0, 32)
 	status.TextColor3 = C.Muted
 
-	-- The popover and the inventory drawer overlap on most layouts, so only one is open.
-	settings.Activated:Connect(function()
-		panel.Visible = not panel.Visible
-		if panel.Visible then
+	-- Upgrades: factory capacity plus the permanent Coin upgrades from UpgradeRules.
+	local upgradesPanel, upgradesBody, upgradesScale = popover("UpgradesPanel", "Upgrades", "Spend Coins on permanent upgrades.")
+	local slotsValue = statRow(upgradesBody, "Slots", "Factory slots", 3)
+	local capacity = GlassUI.button(upgradesBody, "Capacity", "Expand capacity", "Primary", 14)
+	capacity.LayoutOrder = 4
+	capacity.Size = UDim2.new(1, 0, 0, 46)
+	type UpgradeRow = { Card: Frame, Level: TextLabel, Effect: TextLabel, Buy: TextButton }
+	local upgradeRows: { [string]: UpgradeRow } = {}
+	for index, upgrade in ipairs(UpgradeRules.Definitions) do
+		local card = Instance.new("Frame")
+		card.Name = upgrade.Id .. "Upgrade"
+		card.LayoutOrder = 10 + index
+		card.Size = UDim2.new(1, 0, 0, 104)
+		card.BackgroundColor3 = C.Stroke
+		card.BackgroundTransparency = 0.94
+		card.BorderSizePixel = 0
+		GlassUI.corner(card, 10)
+		GlassUI.padding(card, 10, 8)
+		card.Parent = upgradesBody
+		local name = GlassUI.label(card, "Name", upgrade.DisplayName, 14, Theme.Fonts.Bold)
+		name.Size = UDim2.new(0.65, 0, 0, 18)
+		local level = GlassUI.label(card, "Level", "", 12, Theme.Fonts.Bold)
+		level.AnchorPoint = Vector2.new(1, 0)
+		level.Position = UDim2.fromScale(1, 0)
+		level.Size = UDim2.new(0.35, 0, 0, 18)
+		level.TextXAlignment = Enum.TextXAlignment.Right
+		level.TextColor3 = C.Accent
+		local effect = GlassUI.label(card, "Effect", upgrade.Description, 11)
+		effect.Position = UDim2.fromOffset(0, 20)
+		effect.Size = UDim2.new(1, 0, 0, 28)
+		effect.TextColor3 = C.Muted
+		effect.TextYAlignment = Enum.TextYAlignment.Top
+		local buy = GlassUI.button(card, "Buy", "Buy", "Primary", 13)
+		buy.AnchorPoint = Vector2.new(0, 1)
+		buy.Position = UDim2.fromScale(0, 1)
+		buy.Size = UDim2.new(1, 0, 0, 40)
+		upgradeRows[upgrade.Id] = { Card = card, Level = level, Effect = effect, Buy = buy }
+	end
+	local upgradeStatus = GlassUI.label(upgradesBody, "UpgradeStatus", "", 12)
+	upgradeStatus.LayoutOrder = 30
+	upgradeStatus.Size = UDim2.new(1, 0, 0, 32)
+	upgradeStatus.TextColor3 = C.Muted
+
+	-- The popovers and the inventory drawer overlap on most layouts, so only one is open.
+	local function togglePopover(target: Frame)
+		local opening = not target.Visible
+		panel.Visible = false
+		upgradesPanel.Visible = false
+		target.Visible = opening
+		if opening then
 			InventoryController.close()
 		end
+	end
+	settings.Activated:Connect(function()
+		togglePopover(panel)
+	end)
+	upgradesButton.Activated:Connect(function()
+		togglePopover(upgradesPanel)
 	end)
 	InventoryController.onOpen(function()
 		panel.Visible = false
+		upgradesPanel.Visible = false
 	end)
 
 	local state: any = nil
@@ -202,6 +289,10 @@ function EconomyController.start()
 	local function setStatus(message: string, good: boolean?)
 		status.Text = message
 		status.TextColor3 = if good == true then C.Good elseif good == false then C.Bad else C.Muted
+	end
+	local function setUpgradeStatus(message: string, good: boolean?)
+		upgradeStatus.Text = message
+		upgradeStatus.TextColor3 = if good == true then C.Good elseif good == false then C.Bad else C.Muted
 	end
 
 	local function boostChip(chip: Frame, prefix: string, multiplier: any, expiresAt: any)
@@ -320,6 +411,22 @@ function EconomyController.start()
 			capacity.Text = "Capacity maxed"
 			GlassUI.setEnabled(capacity, false)
 		end
+		local baseCooldown = state.BaseRollCooldownSeconds or 3
+		for upgradeId, row in pairs(upgradeRows) do
+			local level = UpgradeRules.level(state.Upgrades, upgradeId)
+			local maxLevel = UpgradeRules.maxLevel(upgradeId)
+			local cost = UpgradeRules.nextCost(state.Upgrades, upgradeId)
+			row.Level.Text = `Lv {level}/{maxLevel}`
+			local now = UpgradeRules.describe(upgradeId, level, baseCooldown)
+			row.Effect.Text = if cost then `Now {now} → next {UpgradeRules.describe(upgradeId, level + 1, baseCooldown)}` else `Maxed: {now}`
+			row.Buy.Text = if cost then `Buy · {NumberFormatter.format(cost)} Coins` else "Maxed"
+			GlassUI.setEnabled(row.Buy, cost ~= nil and state.DataReady == true and state.Coins >= cost)
+		end
+		local threshold = EconomyRules.sanitizeAutoRecycle(state.AutoRecycleBelow)
+		recycleValue.Text = EconomyRules.formatAutoRecycle(threshold)
+		if not recycleInput:IsFocused() then
+			recycleInput.Text = if threshold > 0 then EconomyRules.formatAutoRecycle(threshold) else ""
+		end
 		if not state.DataReady then
 			setStatus(state.DataError or "Factory data is loading.", nil)
 		end
@@ -353,7 +460,7 @@ function EconomyController.start()
 		if response and response.Success then
 			local luckMultiplier = response.LastRollLuckMultiplier or 1
 			refresh(response)
-			EffectsController.play("MachineRolled", { MachineId = response.LastRoll, Rarity = response.LastRarity, LuckMultiplier = luckMultiplier })
+			EffectsController.play("MachineRolled", { MachineId = response.LastRoll, Rarity = response.LastRarity, LuckMultiplier = luckMultiplier, AutoRecycled = response.LastRollAutoRecycled == true })
 		else
 			syncCooldown(response)
 			setStatus(response and response.Reason or "Roll unavailable", false)
@@ -368,17 +475,69 @@ function EconomyController.start()
 	capacity.Activated:Connect(function()
 		if capacity:GetAttribute("GlassDisabled") == true then
 			if state and state.CapacityCost then
-				setStatus(`Need {NumberFormatter.format(state.CapacityCost)} Coins to expand.`, false)
+				setUpgradeStatus(`Need {NumberFormatter.format(state.CapacityCost)} Coins to expand.`, false)
 			end
 			return
 		end
 		local response = invoke(buyCapacity)
 		if response and response.Success then
-			setStatus(`Capacity expanded to {response.Capacity}.`, true)
+			setUpgradeStatus(`Capacity expanded to {response.Capacity}.`, true)
 			refresh(response)
 		elseif response then
-			setStatus(response.Reason or "Capacity unavailable.", false)
+			setUpgradeStatus(response.Reason or "Capacity unavailable.", false)
 		end
+	end)
+
+	for upgradeId, row in pairs(upgradeRows) do
+		row.Buy.Activated:Connect(function()
+			local upgrade = UpgradeRules.get(upgradeId)
+			local cost = state and UpgradeRules.nextCost(state.Upgrades, upgradeId)
+			if row.Buy:GetAttribute("GlassDisabled") == true then
+				if cost then
+					setUpgradeStatus(`Need {NumberFormatter.format(cost)} Coins.`, false)
+				end
+				return
+			end
+			local response = invoke(buyUpgrade, upgradeId)
+			if response and response.Success and upgrade then
+				setUpgradeStatus(`{upgrade.DisplayName} is now level {UpgradeRules.level(response.Upgrades, upgradeId)}.`, true)
+				refresh(response)
+			elseif response then
+				setUpgradeStatus(response.Reason or "Upgrade unavailable.", false)
+			end
+		end)
+	end
+
+	local function saveAutoRecycle(threshold: number)
+		local response = invoke(setAutoRecycle, threshold)
+		if response and response.Success then
+			local saved = EconomyRules.sanitizeAutoRecycle(response.AutoRecycleBelow)
+			setStatus(if saved > 0 then `Auto-recycling rolls more common than {EconomyRules.formatAutoRecycle(saved)}.` else "Auto-recycle is off.", true)
+			refresh(response)
+		elseif response then
+			setStatus(response.Reason or "Setting unavailable.", false)
+		end
+	end
+	recycleSave.Activated:Connect(function()
+		local threshold = EconomyRules.parseAutoRecycle(recycleInput.Text)
+		if not threshold then
+			setStatus("Enter odds like 1/1000, or Off.", false)
+			return
+		end
+		saveAutoRecycle(threshold)
+	end)
+	recycleInput.FocusLost:Connect(function(enterPressed: boolean)
+		if enterPressed then
+			local threshold = EconomyRules.parseAutoRecycle(recycleInput.Text)
+			if threshold then
+				saveAutoRecycle(threshold)
+			else
+				setStatus("Enter odds like 1/1000, or Off.", false)
+			end
+		end
+	end)
+	recycleOff.Activated:Connect(function()
+		saveAutoRecycle(0)
 	end)
 
 	local function place(instance: GuiObject, rect: HudLayout.Rect)
@@ -408,16 +567,28 @@ function EconomyController.start()
 		caption.TextSize = math.round(26 * s)
 		hint.TextSize = math.round(12 * s)
 		place(settings, metrics.Settings)
-		local popover = metrics.SettingsPanel
-		panelScale.Scale = s
-		capacity.Size = UDim2.new(1, 0, 0, math.max(46, Theme.MinTouch / s))
-		panel.Position = UDim2.fromOffset(popover.X, popover.Y)
-		panel.Size = UDim2.fromOffset(popover.W / s, popover.H / s)
+		place(upgradesButton, metrics.Upgrades)
+		local popoverRect = metrics.SettingsPanel
+		local touchHeight = math.max(46, Theme.MinTouch / s)
+		capacity.Size = UDim2.new(1, 0, 0, touchHeight)
+		recycleRow.Size = UDim2.new(1, 0, 0, touchHeight)
+		local buyHeight = math.max(40, Theme.MinTouch / s)
+		for _, row in pairs(upgradeRows) do
+			row.Buy.Size = UDim2.new(1, 0, 0, buyHeight)
+			-- Name and effect lines (48) above the button, plus the card's padding.
+			row.Card.Size = UDim2.new(1, 0, 0, 48 + 6 + buyHeight + 16)
+		end
+		for _, pair in ipairs({ { panel, panelScale }, { upgradesPanel, upgradesScale } }) do
+			local frame, scale = pair[1] :: Frame, pair[2] :: UIScale
+			scale.Scale = s
+			frame.Position = UDim2.fromOffset(popoverRect.X, popoverRect.Y)
+			frame.Size = UDim2.fromOffset(popoverRect.W / s, popoverRect.H / s)
+		end
 	end
 
 	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
 	layout()
-	setStatus("Roll for free; production funds capacity upgrades.", nil)
+	setUpgradeStatus("Production funds every upgrade.", nil)
 	player:GetAttributeChangedSignal("FactoryCoins"):Connect(function()
 		local value = player:GetAttribute("FactoryCoins")
 		if state and type(value) == "number" then

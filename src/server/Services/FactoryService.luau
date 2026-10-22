@@ -83,13 +83,17 @@ end
 
 local function getSaleBuffModifiers(player: Player): { [string]: number? }
 	-- EconomyService owns these server-side attributes. Missing attributes remain neutral.
+	-- The permanent Better Prices upgrade multiplies with any active Coin booster.
+	local upgrade = player:GetAttribute("FactoryUpgradeSaleMultiplier")
+	local upgradeMultiplier = if type(upgrade) == "number" and upgrade >= 1 and upgrade <= 10 then upgrade else 1
 	local expiresAt = player:GetAttribute("FactorySaleValueExpiresAt")
 	if type(expiresAt) ~= "number" or expiresAt <= workspace:GetServerTimeNow() then
-		return { AdditiveBonus = 0, Multiplier = 1 }
+		return { AdditiveBonus = 0, Multiplier = upgradeMultiplier }
 	end
+	local booster = player:GetAttribute("FactorySaleValueMultiplier")
 	return {
 		AdditiveBonus = player:GetAttribute("FactorySaleValueAdditiveBonus"),
-		Multiplier = player:GetAttribute("FactorySaleValueMultiplier"),
+		Multiplier = (if type(booster) == "number" then booster else 1) * upgradeMultiplier,
 	}
 end
 
