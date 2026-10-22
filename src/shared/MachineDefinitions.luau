@@ -6,6 +6,9 @@ local function requireSibling(name: string): any
 	return require("./" .. name)
 end
 CubeTypeDefinitions = requireSibling("CubeTypeDefinitions")
+local MachineModifiers = requireSibling("MachineModifiers")
+local RollSources = requireSibling("RollSources")
+local EconomyConfig = requireSibling("EconomyConfig")
 
 export type ValueModifierLayer = { AdditiveBonus: number?, Multiplier: number? }
 
@@ -39,6 +42,16 @@ export type MachineDefinition = {
 	BonusEvery: number?,
 	BonusMultiplier: number?,
 	RequiredCubeRarity: string?,
+	HighMultiplier: number?,
+	LowMultiplier: number?,
+	-- Payout for sales outside a seller's special condition (×1 unless modified).
+	BasePayoutMultiplier: number?,
+	-- Where the machine can be rolled (RollSources); defaults to any roll.
+	Sources: { string }?,
+	-- Set on modified machines only: the base machine ID and its modifiers.
+	BaseId: string?,
+	Modifiers: { string }?,
+	ModifierValueMultiplier: number?,
 }
 
 local function producer(id: string, name: string, rarity: string, weight: number, description: string, interval: number, value: number, cubeType: string): MachineDefinition
@@ -100,7 +113,7 @@ local definitions: { [string]: MachineDefinition } = {
 	CooldownTuner = { Id = "CooldownTuner", DisplayName = "Cooldown Tuner", Category = "Processor", Description = "Nudges cubes along a little faster and adds 1.1× value.", Rarity = "Common", Rollable = true, RollWeight = 2, Behavior = "AdjustThroughput", TravelScale = 0.75, Multiplier = 1.1 },
 	Duplicator = { Id = "Duplicator", DisplayName = "Duplicator", Category = "Processor", Description = "Creates one bounded additional item.", Rarity = "Epic", Rollable = true, RollWeight = 1, Behavior = "DuplicateItem" },
 	Goldenizer = { Id = "Goldenizer", DisplayName = "Goldenizer", Category = "Processor", Description = "Adds a golden visual state and bounded value bonus.", Rarity = "Epic", Rollable = true, RollWeight = 1, Behavior = "Goldenize", Multiplier = 2, VisualState = "Golden" },
-	LuckyModifier = { Id = "LuckyModifier", DisplayName = "Lucky Modifier", Category = "Processor", Description = "Every other cube is worth 3×; the rest are worth 0.5×.", Rarity = "Legendary", Rollable = true, RollWeight = 1, Behavior = "RandomMultiplier" },
+	LuckyModifier = { Id = "LuckyModifier", DisplayName = "Lucky Modifier", Category = "Processor", Description = "Every other cube is worth 3×; the rest are worth 0.5×.", Rarity = "Legendary", Rollable = true, RollWeight = 1, Behavior = "RandomMultiplier", HighMultiplier = 3, LowMultiplier = 0.5 },
 
 	-- Alternate sellers are rolls and can be installed in the terminal seller slot.
 	QuickCountCounter = { Id = "QuickCountCounter", DisplayName = "Quick-Count Counter", Category = "Seller", Description = "Processes each sale in 0.5 seconds with a slightly lower payout.", Rarity = "Uncommon", Rollable = true, RollWeight = 4, Behavior = "Payout", PayoutMultiplier = 0.95, SaleIntervalSeconds = 0.5 },
@@ -169,24 +182,92 @@ local definitions: { [string]: MachineDefinition } = {
 	FestivalTreasury = { Id = "FestivalTreasury", DisplayName = "Festival Treasury", Category = "Seller", Description = "Every 5th completed sale pays x3; otherwise x1. Accepts one sale every 1.4s.", Rarity = "Legendary", Rollable = true, RollWeight = 1, Behavior = "StreakPayout", PayoutMultiplier = 1, SaleIntervalSeconds = 1.4, VisualStyle = "Seller", BonusEvery = 5, BonusMultiplier = 3 },
 }
 
+-- Fill derived defaults at load, before any modified variant copies a definition.
+for _, definition in pairs(definitions) do
+	definition.VisualStyle = definition.VisualStyle or (if definition.Category == "Producer" then "Dropper" elseif definition.Category == "Seller" then "Seller" else "Processor")
+	if definition.Category == "Producer" then
+		local cubeType = definition.CubeType or "Standard"
+		local typeDefinition = CubeTypeDefinitions.get(cubeType)
+		definition.OutputType = cubeType
+		definition.TypeModifiers = definition.TypeModifiers or { AdditiveBonus = 0, Multiplier = typeDefinition and typeDefinition.ValueMultiplier or 1 }
+	elseif definition.Category == "Seller" then
+		definition.SaleModifiers = definition.SaleModifiers or { AdditiveBonus = 0, Multiplier = 1 }
+	end
+end
+
 local MachineDefinitions = {}
 
+-- Modified machines are built on first use. Only canonical keys of rollable machines
+-- resolve, so the cache is bounded by machines × modifier combinations.
+local variants: { [string]: MachineDefinition } = {}
+
 function MachineDefinitions.get(machineId: string): MachineDefinition?
-	return definitions[machineId]
+	local definition = definitions[machineId]
+	if definition or type(machineId) ~= "string" then
+		return definition
+	end
+	local cached = variants[machineId]
+	if cached then
+		return cached
+	end
+	local baseId, modifierIds = MachineModifiers.parseKey(machineId)
+	local base = baseId and definitions[baseId]
+	if not base or not base.Rollable or #modifierIds == 0 then
+		return nil
+	end
+	local variant = MachineModifiers.apply(base, modifierIds) :: any
+	variants[machineId] = variant
+	return variant
+end
+
+-- The unmodified machine ID behind a key ("Seller+Golden" -> "Seller").
+function MachineDefinitions.baseId(machineId: string): string
+	local definition = MachineDefinitions.get(machineId)
+	return if definition then definition.BaseId or definition.Id else machineId
 end
 
 function MachineDefinitions.all(): { [string]: MachineDefinition }
 	return definitions
 end
 
-function MachineDefinitions.getRollPool(rarity: string?): { MachineDefinition }
+local function rarityBand(rarity: string): any
+	for _, band in ipairs(EconomyConfig.RarityOddsBands) do
+		if band.Name == rarity then
+			return band
+		end
+	end
+	return nil
+end
+
+-- Machines a roll can give under `conditions` (nil means an ordinary roll): the machine
+-- and its rarity must both be obtainable from an active source.
+function MachineDefinitions.getRollPool(rarity: string?, conditions: { [string]: boolean }?): { MachineDefinition }
 	local result = {}
 	for _, definition in pairs(definitions) do
-		if definition.Rollable and (rarity == nil or definition.Rarity == rarity) then
+		if definition.Rollable and (rarity == nil or definition.Rarity == rarity)
+			and RollSources.isAvailable(definition, conditions)
+			and RollSources.isAvailable(rarityBand(definition.Rarity), conditions) then
 			table.insert(result, definition)
 		end
 	end
 	return result
+end
+
+-- Player-facing "where to get it" text, e.g. "Any roll". Rarity and modifier sources are
+-- named too when they are narrower than ordinary rolls.
+function MachineDefinitions.describeSources(definition: MachineDefinition): string
+	local text = RollSources.describe(definition)
+	local band = rarityBand(definition.Rarity)
+	if band and not RollSources.isDefault(band) then
+		text ..= ` · {definition.Rarity}: {RollSources.describe(band)}`
+	end
+	for _, modifierId in ipairs(definition.Modifiers or {}) do
+		local modifier = MachineModifiers.get(modifierId)
+		if modifier and not RollSources.isDefault(modifier) then
+			text ..= ` · {modifier.DisplayName}: {RollSources.describe(modifier)}`
+		end
+	end
+	return text
 end
 
 function MachineDefinitions.validate(): (boolean, string?)
@@ -194,20 +275,18 @@ function MachineDefinitions.validate(): (boolean, string?)
 	local sellerCount = 0
 	local rarities = { Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true }
 	for machineId, definition in pairs(definitions) do
-		definition.VisualStyle = definition.VisualStyle or (if definition.Category == "Producer" then "Dropper" elseif definition.Category == "Seller" then "Seller" else "Processor")
-		if definition.Category == "Producer" then
-			local cubeType = definition.CubeType or "Standard"
-			local typeDefinition = CubeTypeDefinitions.get(cubeType)
-			definition.OutputType = cubeType
-			definition.TypeModifiers = definition.TypeModifiers or { AdditiveBonus = 0, Multiplier = typeDefinition and typeDefinition.ValueMultiplier or 1 }
-		elseif definition.Category == "Seller" then
-			definition.SaleModifiers = definition.SaleModifiers or { AdditiveBonus = 0, Multiplier = 1 }
-		end
 		if definition.Id ~= machineId then
 			return false, `Machine ID mismatch for {machineId}`
 		end
 		if definition.DisplayName == "" or definition.Description == "" then
 			return false, `Machine {machineId} is missing readable text`
+		end
+		if string.find(machineId, MachineModifiers.Separator, 1, true) then
+			return false, `Machine ID {machineId} must not contain "{MachineModifiers.Separator}"`
+		end
+		local sourcesValid, sourcesError = RollSources.validate(definition, `Machine {machineId}`)
+		if not sourcesValid then
+			return false, sourcesError
 		end
 		if definition.Rollable and (not rarities[definition.Rarity] or not definition.RollWeight or definition.RollWeight ~= definition.RollWeight or definition.RollWeight <= 0 or definition.RollWeight == math.huge) then
 			return false, `Rollable machine {machineId} needs a supported rarity and positive inner weight`
@@ -256,6 +335,16 @@ function MachineDefinitions.validate(): (boolean, string?)
 		elseif definition.Category ~= "Processor" then
 			return false, `Machine {machineId} has an unsupported category`
 		end
+	end
+	for _, band in ipairs(EconomyConfig.RarityOddsBands) do
+		local bandValid, bandError = RollSources.validate(band, `Rarity {band.Name}`)
+		if not bandValid then
+			return false, bandError
+		end
+	end
+	local modifiersValid, modifiersError = MachineModifiers.validate()
+	if not modifiersValid then
+		return false, modifiersError
 	end
 	if producerCount == 0 then return false, "At least one producer is required" end
 	if sellerCount == 0 then return false, "At least one seller is required" end

@@ -15,6 +15,8 @@ local MachineDefinitions = require(Shared:WaitForChild("MachineDefinitions"))
 local MachineVisualConfig = require(Shared:WaitForChild("MachineVisualConfig"))
 local ModelBuilder = require(Shared:WaitForChild("MachineModelBuilder"))
 local MachineEffects = require(Shared:WaitForChild("MachineEffects"))
+local MachineModifiers = require(Shared:WaitForChild("MachineModifiers"))
+local RollSources = require(Shared:WaitForChild("RollSources"))
 local GlassUI = require(script.Parent.GlassUI)
 
 local Theme = GlassUI.Theme
@@ -265,6 +267,18 @@ function RollReveal.mount(gui: ScreenGui)
 	previewGlyph.Size = UDim2.fromScale(1, 1)
 	previewGlyph.TextXAlignment = Enum.TextXAlignment.Center
 	previewGlyph.ZIndex = 5
+	-- Modifier badges (GOLDEN, QUANTUM...) stack in the preview's corner.
+	local modifierBadges = Instance.new("Frame")
+	modifierBadges.Name = "Modifiers"
+	modifierBadges.BackgroundTransparency = 1
+	modifierBadges.Position = UDim2.fromOffset(8, 8)
+	modifierBadges.Size = UDim2.new(1, -16, 1, -16)
+	modifierBadges.ZIndex = 6
+	modifierBadges.Parent = previewWell
+	local modifierList = Instance.new("UIListLayout")
+	modifierList.Padding = UDim.new(0, 6)
+	modifierList.SortOrder = Enum.SortOrder.LayoutOrder
+	modifierList.Parent = modifierBadges
 	local skip = Instance.new("TextButton")
 	skip.Name = "Skip"
 	skip.Text = ""
@@ -301,6 +315,12 @@ function RollReveal.mount(gui: ScreenGui)
 	description.Size = UDim2.new(1, -268, 0, 40)
 	description.TextColor3 = C.Muted
 	description.TextYAlignment = Enum.TextYAlignment.Top
+	-- Modified machines append their modifier notes; shrink to fit rather than clip.
+	description.TextScaled = true
+	local descriptionLimit = Instance.new("UITextSizeConstraint")
+	descriptionLimit.MinTextSize = 10
+	descriptionLimit.MaxTextSize = 14
+	descriptionLimit.Parent = description
 	local footnote = GlassUI.label(result, "Footnote", "", 13, Theme.Fonts.Bold)
 	footnote.Position = UDim2.new(0, 24, 1, -36)
 	footnote.Size = UDim2.new(1, -48, 0, 20)
@@ -342,7 +362,7 @@ function RollReveal.mount(gui: ScreenGui)
 
 	local function cardFor(definition: any): CardData
 		local rarity = EconomyRules.getMachineRarity(definition.Id, pool) or definition.Rarity or "Common"
-		local variant = MachineVisualConfig.Variants[definition.Id]
+		local variant = MachineVisualConfig.Variants[MachineDefinitions.baseId(definition.Id)]
 		return {
 			Id = definition.Id,
 			Name = definition.DisplayName,
@@ -590,8 +610,22 @@ function RollReveal.mount(gui: ScreenGui)
 			effectChip.Size = UDim2.fromOffset(0, 26)
 		end
 		description.Text = if definition then definition.Description else ""
-		footnote.Text = "Click a conveyor slot to place it"
-		previewGlyph.Text = (definition and MachineVisualConfig.Variants[definition.Id] and MachineVisualConfig.Variants[definition.Id].Symbol) or "?"
+		footnote.Text = if definition then `Found in: {MachineDefinitions.describeSources(definition)}  ·  Click a conveyor slot to place it` else "Click a conveyor slot to place it"
+		for _, child in ipairs(modifierBadges:GetChildren()) do
+			if child:IsA("GuiObject") then
+				child:Destroy()
+			end
+		end
+		for order, modifierId in ipairs(definition and definition.Modifiers or {}) do
+			local modifier = MachineModifiers.get(modifierId)
+			if modifier then
+				local badge = GlassUI.chip(modifierBadges, modifier.Id, string.upper(modifier.DisplayName), GlassUI.fromRgb(modifier.Color), 13)
+				badge.LayoutOrder = order
+				badge.ZIndex = 6
+			end
+		end
+		local variant = definition and MachineVisualConfig.Variants[MachineDefinitions.baseId(definition.Id)]
+		previewGlyph.Text = (variant and variant.Symbol) or "?"
 		previewGlyph.TextColor3 = color
 		startPreview(definition)
 
@@ -676,7 +710,7 @@ function RollReveal.mount(gui: ScreenGui)
 	end
 
 	local function beginReel(luck: number?)
-		pool = EconomyRules.getLuckAdjustedRollPool(MachineDefinitions.getRollPool(), luck or 1)
+		pool = EconomyRules.getLuckAdjustedRollPool(MachineDefinitions.getRollPool(nil, RollSources.conditionsForRoll(luck)), luck or 1)
 		data = {}
 		position = 0
 		lastTick = 0
@@ -726,7 +760,7 @@ function RollReveal.mount(gui: ScreenGui)
 			phase = "Spinning"
 			runSpinLoop(token)
 		end
-		pool = EconomyRules.getLuckAdjustedRollPool(MachineDefinitions.getRollPool(), luck or 1)
+		pool = EconomyRules.getLuckAdjustedRollPool(MachineDefinitions.getRollPool(nil, RollSources.conditionsForRoll(luck)), luck or 1)
 		local definition = MachineDefinitions.get(machineId or "")
 		local rarity = rarityOverride or (definition and EconomyRules.getMachineRarity(definition.Id, pool)) or "Common"
 		local odds = if definition then EconomyRules.getMachineOddsLabel(definition.Id, pool) or "" else ""

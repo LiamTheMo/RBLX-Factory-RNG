@@ -57,7 +57,9 @@ function MachineEffects.tag(definition: any): string
 	end
 	local behavior = definition.Behavior
 	if definition.Category == "Producer" then
-		return "Makes " .. typeName(definition.CubeType or "Standard")
+		local text = "Makes " .. typeName(definition.CubeType or "Standard")
+		local boost = definition.ModifierValueMultiplier
+		return if type(boost) == "number" and boost > 1 then `{text} · ×{MachineEffects.number(boost)}` else text
 	elseif definition.Category == "Seller" then
 		if type(definition.BonusEvery) == "number" then
 			return string.format("Every %dth: %s", definition.BonusEvery, times(definition.BonusMultiplier))
@@ -81,7 +83,7 @@ function MachineEffects.tag(definition: any): string
 		if type(definition.BonusChance) == "number" then
 			return string.format("%s: %s All", percent(definition.BonusChance), times(definition.BonusMultiplier))
 		end
-		return "3× or 0.5× All"
+		return `{times(definition.HighMultiplier or 3)} or {times(definition.LowMultiplier or 0.5)} All`
 	elseif behavior == "ScaleVisual" then
 		return if definition.Multiplier then times(definition.Multiplier) .. " All · Big" else times(definition.SizeScale) .. " Size"
 	elseif behavior == "SetMaterial" then
@@ -93,7 +95,7 @@ function MachineEffects.tag(definition: any): string
 		local scale = if type(definition.TravelScale) == "number" and definition.TravelScale > 0 then definition.TravelScale else 1
 		return times(1 / scale) .. " Speed"
 	elseif behavior == "DuplicateItem" then
-		return "+1 Cube"
+		return if definition.Multiplier then times(definition.Multiplier) .. " All · +1 Cube" else "+1 Cube"
 	end
 	return times(definition.Multiplier) .. " All"
 end
