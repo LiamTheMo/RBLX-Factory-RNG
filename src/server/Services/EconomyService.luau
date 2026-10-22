@@ -9,6 +9,8 @@ local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
 local EconomyRules = require(Shared:WaitForChild("EconomyRules"))
 local FactoryConfig = require(Shared:WaitForChild("FactoryConfig"))
 local MachineDefinitions = require(Shared:WaitForChild("MachineDefinitions"))
+local MachineModifiers = require(Shared:WaitForChild("MachineModifiers"))
+local RollSources = require(Shared:WaitForChild("RollSources"))
 local FactoryService = require(script.Parent.FactoryService)
 local AnalyticsService = require(script.Parent.AnalyticsService)
 local EffectService = require(script.Parent.EffectService)
@@ -154,9 +156,9 @@ local function getClientState(player: Player): { [string]: any }
 	}
 end
 
-local function chooseMachine(luckMultiplier: number): (any?, { any })
-	local rollPool = MachineDefinitions.getRollPool()
-	local rarityWeights = EconomyRules.getLuckAdjustedRarityWeights(EconomyConfig.RarityWeights, luckMultiplier)
+local function chooseMachine(luckMultiplier: number, conditions: { [string]: boolean }): (any?, { any })
+	local rollPool = MachineDefinitions.getRollPool(nil, conditions)
+	local rarityWeights = EconomyRules.getLuckAdjustedRarityWeights(EconomyRules.getRarityWeightsForPool(rollPool), luckMultiplier)
 	local rarityTotal = EconomyRules.getTotalWeight(rarityWeights)
 	local rarity = EconomyRules.weightedPick(rarityWeights, random:NextNumber() * rarityTotal)
 	if not rarity then return nil, rollPool end
@@ -187,16 +189,28 @@ local function rollMachine(player: Player)
 	local canRoll, reason = EconomyRules.canRoll(profile.NextRollAt, now, inventoryCount(state.inventory))
 	if not canRoll then return response(player, false, reason) end
 	local luckMultiplier = refreshLuck(player, profile, false)
-	local definition, rollPool = chooseMachine(luckMultiplier)
+	local conditions = RollSources.conditionsForRoll(luckMultiplier)
+	local definition, rollPool = chooseMachine(luckMultiplier, conditions)
 	if not definition then return response(player, false, "No rollable machines are configured") end
 	local rarity = EconomyRules.getMachineRarity(definition.Id, rollPool) or definition.Rarity
-	state.inventory[definition.Id] = (state.inventory[definition.Id] or 0) + 1
+	local modifierIds = MachineModifiers.roll(function()
+		return random:NextNumber()
+	end, conditions)
+	local machineKey = MachineModifiers.makeKey(definition.Id, modifierIds)
+	if not MachineDefinitions.get(machineKey) then
+		machineKey = definition.Id
+		modifierIds = {}
+	end
+	state.inventory[machineKey] = (state.inventory[machineKey] or 0) + 1
 	profile.RollCount += 1
 	profile.NextRollAt = now + EconomyConfig.RollCooldownSeconds
-	player:SetAttribute("FactoryLastRoll", definition.Id)
+	player:SetAttribute("FactoryLastRoll", machineKey)
 	player:SetAttribute("FactoryLastRarity", rarity)
 	player:SetAttribute("FactoryLastRollLuckMultiplier", luckMultiplier)
 	AnalyticsService.record(player, "MachineRolled")
+	for _, modifierId in ipairs(modifierIds) do
+		AnalyticsService.record(player, "ModifierRolled_" .. modifierId)
+	end
 	if (AnalyticsService.snapshot(player).MachineRolled or 0) == 1 then AnalyticsService.record(player, "FirstRoll") end
 	EffectService.fire(player, "InventoryChanged")
 	return response(player, true)

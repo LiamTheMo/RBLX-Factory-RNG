@@ -118,6 +118,26 @@ Epic = ×100
 Legendary = ×1000
 
 That structure quickly makes earlier machines irrelevant.
+
+### Machine modifiers
+
+Every roll also rolls each modifier independently on the chosen machine (`src/shared/MachineModifiers.luau`). Modifiers stack; all three can land on one machine.
+
+| Modifier | Chance | Droppers (base cube value) | Upgraders and sellers (multiplier) |
+| --- | ---: | ---: | ---: |
+| Golden | 1/100 | ×2 | +1 (3× → 4×) |
+| Overclocked | 1/1,000 | ×4 | +3 (3× → 6×) |
+| Quantum | 1/10,000 | ×5 | +5 (2× → 7×) |
+
+- A modified machine is stored as a variant key: the base ID plus its modifiers in canonical order (`Seller+Golden+Quantum`). Inventory, layout, saves and remotes carry it like any machine ID; `MachineDefinitions.get` builds and caches the modified definition, and accepts only canonical keys of rollable machines.
+- Displayed odds multiply the machine's odds by each modifier's chance (a 1/10 machine is 1/1,000 when Golden). Rarity stays the base machine's. Luck does not change modifier chances.
+- Upgraders add the bonus wherever they apply a multiplier: type upgraders only to their cube type, chance upgraders only on a hit, the alternating Lucky Modifier to both outcomes. The Duplicator counts as 2× (two cubes), so each cube gets `(2 + bonus) / 2` (Golden 3× in total, Quantum 7×). Sellers add the bonus to every sale: their special payout and the ordinary ×1 alike.
+- Conflicts: a modifier may list `ConflictsWith`; such modifiers never share a machine, the rarer roll wins, and keys combining them are rejected. None of the current three conflict.
+- Item value stays capped by `FactoryConfig.MaxItemValue`.
+
+### Where content is obtainable (roll sources)
+
+`src/shared/RollSources.luau` defines sources. A source is active when the roll context has every condition it requires (`Weather:*`, `Event:*`, `Zone:*`, `Effect:*`). Machines (`Sources` field, default `StandardRoll`), rarity bands (`EconomyConfig.RarityOddsBands[*].Sources`) and modifiers (`Sources`) are obtainable while any of their sources is active. The server builds the context in `RollSources.conditionsForRoll`; today it only adds `Effect:Luck` while a Luck booster is active (the `LuckyRoll` source). Weather, events and special places add a source, tag content with it, and add their condition to the context. Rarities with no obtainable machine drop out of the rarity draw. Inventory cards and the roll result show where a machine is found.
 ## 9. Inflation Risks
 
 Watch for:

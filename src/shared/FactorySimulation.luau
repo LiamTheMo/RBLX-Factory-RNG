@@ -207,13 +207,15 @@ function FactorySimulation:_processItemAtSlot(item: Item): boolean
 		elseif behavior == "AdjustThroughput" then
 			label ..= " · speed ×" .. NumberFormatter.format(1 / (definition.TravelScale or 1))
 		end
-		-- Size, paint and speed machines also carry a value bonus so each one is worth placing.
-		local sideBonus = (behavior == "ScaleVisual" or behavior == "SetMaterial" or behavior == "AdjustThroughput") and definition.Multiplier
+		-- Size, paint and speed machines also carry a value bonus so each one is worth placing;
+		-- a modified Duplicator gains one too.
+		local sideBonus = (behavior == "ScaleVisual" or behavior == "SetMaterial" or behavior == "AdjustThroughput" or behavior == "DuplicateItem") and definition.Multiplier
 		if sideBonus then
 			label ..= " ×" .. NumberFormatter.format(sideBonus)
 		end
-		if behavior == "RandomMultiplier" then
-			label ..= " ×" .. NumberFormatter.format(if item.Id % 2 == 0 then 3 else 0.5)
+		local alternating = if item.Id % 2 == 0 then definition.HighMultiplier or 3 else definition.LowMultiplier or 0.5
+		if behavior == "RandomMultiplier" and definition.BonusChance == nil then
+			label ..= " ×" .. NumberFormatter.format(alternating)
 		end
 		if #item.ModifierLabels < FactoryConfig.MaxItemModifierLabels then
 			table.insert(item.ModifierLabels, label)
@@ -259,7 +261,7 @@ function FactorySimulation:_processItemAtSlot(item: Item): boolean
 		elseif behavior == "RandomMultiplier" then
 			local chance = definition.BonusChance
 			local multiplier = if chance == nil
-				then (if item.Id % 2 == 0 then 3 else 0.5)
+				then alternating
 				else (if chance > 0 and item.Id % math.max(1, math.floor(1 / chance + 0.5)) == 0 then definition.BonusMultiplier or 2 else 1)
 			if multiplier ~= 1 then
 				item.Value = math.max(1, math.min(math.floor(item.Value * multiplier * 100 + 0.5) / 100, self.maxItemValue))
@@ -314,7 +316,9 @@ end
 
 local function sellerModifiersFor(item: Item, seller: any, soldItems: number): ValueModifierLayer
 	local modifiers = table.clone(seller.SaleModifiers or { AdditiveBonus = 0, Multiplier = 1 })
-	local payoutMultiplier = 1
+	-- Sales outside the seller's special condition pay ×1, or more on a modified seller.
+	local basePayout = seller.BasePayoutMultiplier or 1
+	local payoutMultiplier = basePayout
 	local behavior = seller.Behavior or "Payout"
 	if behavior == "ConditionalPayout" and item.Value >= (seller.MinimumValue or math.huge) then
 		payoutMultiplier = seller.PayoutMultiplier or 1
@@ -322,9 +326,9 @@ local function sellerModifiersFor(item: Item, seller: any, soldItems: number): V
 		payoutMultiplier = seller.PayoutMultiplier or 1
 	elseif behavior == "ChancePayout" then
 		local denominator = math.max(1, math.floor(1 / math.max(seller.BonusChance or 0, 0.000001) + 0.5))
-		payoutMultiplier = if item.Id % denominator == 0 then seller.BonusMultiplier or 1 else 1
+		payoutMultiplier = if item.Id % denominator == 0 then seller.BonusMultiplier or 1 else basePayout
 	elseif behavior == "StreakPayout" then
-		payoutMultiplier = if (soldItems + 1) % (seller.BonusEvery or math.huge) == 0 then seller.BonusMultiplier or 1 else 1
+		payoutMultiplier = if (soldItems + 1) % (seller.BonusEvery or math.huge) == 0 then seller.BonusMultiplier or 1 else basePayout
 	elseif behavior == "RarityPayout" then
 		local cubeType = CubeTypeDefinitions.get(item.TypeId)
 		if cubeType and (CUBE_RARITY_RANKS[cubeType.Rarity] or 0) >= (CUBE_RARITY_RANKS[seller.RequiredCubeRarity or "Epic"] or 4) then
