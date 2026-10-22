@@ -11,7 +11,8 @@ local FactoryConfig = {
 	MaxCoins = 9_007_199_254_740_991, -- largest exactly representable integer
 	MaxItemModifierLabels = 8,
 	SpawnIntervalSeconds = 1,
-	TravelTimePerSlotSeconds = 1.15,
+	-- Seconds for a cube to cross one slot; the client belt cleats move at the same speed.
+	TravelTimePerSlotSeconds = 2,
 	MaxCatchUpSpawnsPerStep = 256,
 	MaxFactoryCapacity = 3,
 	DefaultRoute = { "BasicDropper", "ValueMultiplier", "Seller" },

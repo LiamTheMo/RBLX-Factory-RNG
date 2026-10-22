@@ -89,6 +89,18 @@ and free rolls still go through the existing validated remotes.
   inventory/placement cards (rarity moves to the odds line), on the roll result card, and
   beside the symbol on each placed machine's identity plate.
 
+## Round 5: machine behaviour and belt speed
+
+- **Machines act as cubes pass them:** the simulation used to apply a machine when the cube
+  finished the segment after it, so effects showed one slot late (a slot-4 Paint Machine
+  recoloured cubes at the seller, after the sale, and enlarged cubes were sold before they
+  grew). Machines now act on arrival; a regression test checks paint and size on the belt.
+- **Every upgrader adds value:** Giantifier `1.5× All · Big`, Paint Machine `1.25× All ·
+  Paint`, Conveyor Booster `1.2× All · Fast`, Cooldown Tuner `1.1× All · Fast`; Lucky
+  Modifier is described as `3× or 0.5× All`.
+- **Slower belt:** 2 s per slot (was 1.15 s); cubes and the sparser, lower-contrast cleats
+  move at the same speed.
+
 ## Completed / Passed
 
 - Luau compilation, all pure Luau suites (including the new layout spec across eleven

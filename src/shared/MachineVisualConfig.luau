@@ -33,7 +33,8 @@ local Visuals = {
 		Stripe = { Height = 0.16, Depth = 0.04, Color = { 255, 196, 92 } },
 		Bolt = { Diameter = 0.22, Depth = 0.08, Color = { 92, 99, 110 } },
 		-- Client-animated cleats that ride the belt toward the seller at item speed.
-		Slat = { Spacing = 1.25, Length = 0.16, Height = 0.05, Inset = 0.25, Color = { 96, 103, 116 }, AnimateDistance = 160 },
+		-- Sparse, low-contrast cleats so the moving belt reads without drawing the eye.
+		Slat = { Spacing = 2.5, Length = 0.12, Height = 0.04, Inset = 0.25, Color = { 62, 66, 74 }, AnimateDistance = 160 },
 		-- Invisible click plates on each slot; the client draws the selection box.
 		Selector = { Thickness = 0.04, LengthInset = 0.3, BoxHeight = 2.2 },
 		SellerBay = { StripeColor = { 240, 168, 143 } },

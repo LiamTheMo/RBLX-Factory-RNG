@@ -64,12 +64,15 @@ function MachineEffects.tag(definition: any): string
 		if type(definition.BonusChance) == "number" then
 			return string.format("%s: %s All", percent(definition.BonusChance), times(definition.BonusMultiplier))
 		end
-		return "Random ×"
+		return "3× or 0.5× All"
 	elseif behavior == "ScaleVisual" then
-		return times(definition.SizeScale) .. " Size"
+		return if definition.Multiplier then times(definition.Multiplier) .. " All · Big" else times(definition.SizeScale) .. " Size"
 	elseif behavior == "SetMaterial" then
-		return "Paint"
+		return if definition.Multiplier then times(definition.Multiplier) .. " All · Paint" else "Paint"
 	elseif behavior == "AdjustThroughput" then
+		if definition.Multiplier then
+			return times(definition.Multiplier) .. " All · Fast"
+		end
 		local scale = if type(definition.TravelScale) == "number" and definition.TravelScale > 0 then definition.TravelScale else 1
 		return times(1 / scale) .. " Speed"
 	elseif behavior == "DuplicateItem" then

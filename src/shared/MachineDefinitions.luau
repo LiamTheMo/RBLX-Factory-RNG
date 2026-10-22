@@ -93,14 +93,14 @@ local definitions: { [string]: MachineDefinition } = {
 	RainbowRefractor = { Id = "RainbowRefractor", DisplayName = "Rainbow Refractor", Category = "Processor", Description = "Further enhances Rainbow cubes.", Rarity = "Legendary", Rollable = true, RollWeight = 1, Behavior = "TypeMultiplier", TypeFilter = "Rainbow", Multiplier = 1.75 },
 	-- Existing physical, throughput, and item-count behaviors remain rollable.
 	ValueMultiplier = { Id = "ValueMultiplier", DisplayName = "Value Multiplier", Category = "Processor", Description = "Doubles an item's value.", Rarity = "Common", Rollable = true, RollWeight = 3, Behavior = "MultiplyValue", Multiplier = 2 },
-	Giantifier = { Id = "Giantifier", DisplayName = "Giantifier", Category = "Processor", Description = "Makes the item visibly larger.", Rarity = "Common", Rollable = true, RollWeight = 2, Behavior = "ScaleVisual", SizeScale = 1.8 },
-	PaintMachine = { Id = "PaintMachine", DisplayName = "Paint Machine", Category = "Processor", Description = "Paints the item for later visual combinations.", Rarity = "Common", Rollable = true, RollWeight = 2, Behavior = "SetMaterial", VisualState = "Painted" },
+	Giantifier = { Id = "Giantifier", DisplayName = "Giantifier", Category = "Processor", Description = "Makes cubes 1.8× bigger and worth 1.5× more.", Rarity = "Common", Rollable = true, RollWeight = 2, Behavior = "ScaleVisual", SizeScale = 1.8, Multiplier = 1.5 },
+	PaintMachine = { Id = "PaintMachine", DisplayName = "Paint Machine", Category = "Processor", Description = "Paints cubes pink; painted cubes are worth 1.25× more.", Rarity = "Common", Rollable = true, RollWeight = 2, Behavior = "SetMaterial", VisualState = "Painted", Multiplier = 1.25 },
 	CompoundPress = { Id = "CompoundPress", DisplayName = "Compound Press", Category = "Processor", Description = "Compresses an item into a higher-value form.", Rarity = "Uncommon", Rollable = true, RollWeight = 2, Behavior = "MultiplyValue", Multiplier = 1.5 },
-	ConveyorBooster = { Id = "ConveyorBooster", DisplayName = "Conveyor Booster", Category = "Processor", Description = "Speeds an item through downstream slots.", Rarity = "Uncommon", Rollable = true, RollWeight = 2, Behavior = "AdjustThroughput", TravelScale = 0.5 },
-	CooldownTuner = { Id = "CooldownTuner", DisplayName = "Cooldown Tuner", Category = "Processor", Description = "Provides a smaller, reliable throughput improvement.", Rarity = "Common", Rollable = true, RollWeight = 2, Behavior = "AdjustThroughput", TravelScale = 0.75 },
+	ConveyorBooster = { Id = "ConveyorBooster", DisplayName = "Conveyor Booster", Category = "Processor", Description = "Rushes cubes to the next machine and adds 1.2× value.", Rarity = "Uncommon", Rollable = true, RollWeight = 2, Behavior = "AdjustThroughput", TravelScale = 0.5, Multiplier = 1.2 },
+	CooldownTuner = { Id = "CooldownTuner", DisplayName = "Cooldown Tuner", Category = "Processor", Description = "Nudges cubes along a little faster and adds 1.1× value.", Rarity = "Common", Rollable = true, RollWeight = 2, Behavior = "AdjustThroughput", TravelScale = 0.75, Multiplier = 1.1 },
 	Duplicator = { Id = "Duplicator", DisplayName = "Duplicator", Category = "Processor", Description = "Creates one bounded additional item.", Rarity = "Epic", Rollable = true, RollWeight = 1, Behavior = "DuplicateItem" },
 	Goldenizer = { Id = "Goldenizer", DisplayName = "Goldenizer", Category = "Processor", Description = "Adds a golden visual state and bounded value bonus.", Rarity = "Epic", Rollable = true, RollWeight = 1, Behavior = "Goldenize", Multiplier = 2, VisualState = "Golden" },
-	LuckyModifier = { Id = "LuckyModifier", DisplayName = "Lucky Modifier", Category = "Processor", Description = "Alternates between bounded high and low value outcomes.", Rarity = "Legendary", Rollable = true, RollWeight = 1, Behavior = "RandomMultiplier" },
+	LuckyModifier = { Id = "LuckyModifier", DisplayName = "Lucky Modifier", Category = "Processor", Description = "Every other cube is worth 3×; the rest are worth 0.5×.", Rarity = "Legendary", Rollable = true, RollWeight = 1, Behavior = "RandomMultiplier" },
 
 	-- Alternate sellers are rolls and can be installed in the terminal seller slot.
 	QuickCountCounter = { Id = "QuickCountCounter", DisplayName = "Quick-Count Counter", Category = "Seller", Description = "Processes each sale in 0.5 seconds with a slightly lower payout.", Rarity = "Uncommon", Rollable = true, RollWeight = 4, Behavior = "Payout", PayoutMultiplier = 0.95, SaleIntervalSeconds = 0.5 },
@@ -239,6 +239,9 @@ function MachineDefinitions.validate(): (boolean, string?)
 				if definition.BonusChance ~= nil and (definition.BonusChance < 0 or definition.BonusChance > 1) then return false, `Processor {machineId} has an invalid bonus chance` end
 			elseif behavior ~= "DuplicateItem" then
 				return false, `Processor {machineId} has an unsupported behavior`
+			end
+			if definition.Multiplier ~= nil and (definition.Multiplier <= 0 or definition.Multiplier > 10) then
+				return false, `Processor {machineId} has an invalid multiplier`
 			end
 		elseif definition.Category == "Seller" then
 			sellerCount += 1
