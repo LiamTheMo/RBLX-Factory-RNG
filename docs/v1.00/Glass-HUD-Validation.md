@@ -101,6 +101,16 @@ and free rolls still go through the existing validated remotes.
 - **Slower belt:** 2 s per slot (was 1.15 s); cubes and the sparser, lower-contrast cleats
   move at the same speed.
 
+## Round 6: machine role labels
+
+- **Role labels:** every machine names its job — `DROPPER` (producers), `UPGRADER`
+  (processors) or `SELLER` — from `MachineEffects.Roles`, keyed by machine category, so new
+  machines get a label without UI changes. Role colors are saturated so they never read as
+  a pastel rarity color.
+- Shown as a glass pill floating above each placed machine (`RoleLabel`, stud-sized, hidden
+  beyond 60 studs), a corner badge on each inventory card preview, and the first chip on
+  the roll result.
+
 ## Completed / Passed
 
 - Luau compilation, all pure Luau suites (including the new layout spec across eleven
@@ -136,6 +146,10 @@ and free rolls still go through the existing validated remotes.
 - Round 4 live check: place a machine and leave within a few seconds, rejoin, and confirm
   it stayed; watch drops appear around the map about once a minute per player; read the
   effect tags on cards, the roll result and placed machines.
+
+- Round 6 live check: role pills above placed machines are readable and sit clear of the
+  machine and passing cubes; the inventory card badge and roll result chip read clearly
+  on desktop and phone.
 
 ## Incomplete / Needs Work
 
