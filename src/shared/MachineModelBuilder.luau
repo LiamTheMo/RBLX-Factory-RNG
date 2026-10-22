@@ -12,6 +12,57 @@ local function rgb(channels: { number }): Color3
 	return Color3.fromRGB(channels[1], channels[2], channels[3])
 end
 
+-- Floating glass pill above the machine naming its job ("DROPPER", "UPGRADER", "SELLER").
+-- Sized in studs so it shrinks with distance; hidden past MaxDistance to keep other plots tidy.
+local function addRoleLabel(model: Model, housing: Part, definition: any)
+	local role = MachineEffects.role(definition)
+	if not role then
+		return
+	end
+	local top = housing.Position.Y + housing.Size.Y / 2
+	for _, child in ipairs(model:GetChildren()) do
+		if child:IsA("BasePart") and child.Transparency < 1 then
+			top = math.max(top, child.Position.Y + child.Size.Y / 2)
+		end
+	end
+	local color = rgb(role.Color)
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "RoleLabel"
+	billboard.Adornee = housing
+	billboard.Size = UDim2.fromScale(2.6, 0.62)
+	billboard.StudsOffsetWorldSpace = Vector3.new(0, top - housing.Position.Y + 0.65, 0)
+	billboard.MaxDistance = 60
+	billboard.LightInfluence = 0
+	billboard.Parent = housing
+	local pill = Instance.new("Frame")
+	pill.Name = "Pill"
+	pill.Size = UDim2.fromScale(1, 1)
+	pill.BackgroundColor3 = Theme.Colors.Glass
+	pill.BackgroundTransparency = Theme.Transparency.Glass
+	pill.BorderSizePixel = 0
+	pill.Parent = billboard
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = pill
+	local rim = Instance.new("UIStroke")
+	rim.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	rim.Color = color
+	rim.Thickness = 2
+	rim.Transparency = 0.2
+	rim.Parent = pill
+	local label = Instance.new("TextLabel")
+	label.Name = "Role"
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.Position = UDim2.fromScale(0.5, 0.5)
+	label.Size = UDim2.fromScale(0.82, 0.72)
+	label.BackgroundTransparency = 1
+	label.Text = string.upper(role.Name)
+	label.TextColor3 = color
+	label.FontFace = Theme.Fonts.Heavy
+	label.TextScaled = true
+	label.Parent = pill
+end
+
 function Builder.build(parent: Instance, origin: Vector3, slot: number, definition: any): (Model, Part, Part?)
 	local profileKey = definition.VisualStyle or (if definition.Category == "Producer" then "Dropper" else definition.Category)
 	local profile = Visuals.Profiles[profileKey] or Visuals.Profiles.Processor
@@ -115,6 +166,7 @@ function Builder.build(parent: Instance, origin: Vector3, slot: number, definiti
 		tag.TextXAlignment = Enum.TextXAlignment.Left
 		tag.Parent = badge
 	end
+	addRoleLabel(model, housing, definition)
 	return model, housing, hitbox
 end
 

@@ -29,9 +29,21 @@ expect(tag("PaintMachine") == "1.25× All · Paint", "the paint machine shows it
 expect(tag("LuckyModifier") == "3× or 0.5× All", "the alternating modifier shows both outcomes")
 expect(tag("LuckyLantern") == "10%: 2× All", "chance upgraders show their odds")
 
+local function role(id: string): string?
+	local found = MachineEffects.role(MachineDefinitions.get(id))
+	return found and found.Name
+end
+
+expect(role("BasicDropper") == "Dropper" and role("FrostPopper") == "Dropper", "producers read as droppers")
+expect(role("ValueMultiplier") == "Upgrader" and role("FrostFramer") == "Upgrader", "processors read as upgraders")
+expect(role("Seller") == "Seller" and role("LuckyTill") == "Seller", "sellers read as sellers")
+expect(MachineEffects.role(nil) == nil and MachineEffects.role({ Category = "Unknown" }) == nil, "unknown categories have no role")
+
 for id, definition in pairs(MachineDefinitions.all()) do
 	local text = MachineEffects.tag(definition)
 	expect(text ~= "" and #text <= 24, `machine {id} needs a short effect tag, got "{text}"`)
+	local found = MachineEffects.role(definition)
+	expect(found ~= nil and #found.Color == 3, `machine {id} needs a role label`)
 end
 
-print("Machine effect tags passed")
+print("Machine effect tags and roles passed")
