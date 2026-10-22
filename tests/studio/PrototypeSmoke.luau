@@ -329,6 +329,10 @@ local success, message = pcall(function()
 	task.wait(0.1)
 	local sellerRow = inventoryHud.MachinePanel.MachineList:FindFirstChild("Owned_Seller")
 	assert(sellerRow and sellerRow:FindFirstChild("MachineDetails"), "owned inventory omitted the Seller")
+	for _, tab in ipairs({ "ProducerTab", "ProcessorTab", "SellerTab", "BoosterTab" }) do
+		assert(inventoryHud.MachinePanel.TabBar:FindFirstChild(tab), "inventory category tab missing: " .. tab)
+	end
+	assert(sellerRow:FindFirstChild("MachinePreview", true), "machine card omitted its live model preview")
 	-- Modified machines carry their modifier as a tag on the inventory card.
 	assert(grantFunction:InvokeServer("GoldenMachine"), "test Golden machine grant failed")
 	task.wait(0.15)
@@ -341,10 +345,6 @@ local success, message = pcall(function()
 	assert(goldenRow.MachineName.Text == "Golden Value Multiplier", "Golden machine card should be named after its modifier")
 	local goldenOdds = economyRules.getMachineOddsLabel("ValueMultiplier+Golden", definition.getRollPool())
 	assert(goldenOdds and goldenRow.RollOdds.Text:find(goldenOdds, 1, true), "Golden machine card should show odds including the modifier")
-	for _, tab in ipairs({ "ProducerTab", "ProcessorTab", "SellerTab", "BoosterTab" }) do
-		assert(inventoryHud.MachinePanel.TabBar:FindFirstChild(tab), "inventory category tab missing: " .. tab)
-	end
-	assert(sellerRow:FindFirstChild("MachinePreview", true), "machine card omitted its live model preview")
 	local targetDrop = findDropFunction:InvokeServer()
 	assert(targetDrop and targetDrop:IsA("BasePart") and targetDrop:GetAttribute("Landed") == true and not targetDrop.CanTouch, "test booster was not held after landing")
 	assert(not targetDrop:FindFirstChildOfClass("ProximityPrompt"), "world booster should not need an interaction prompt")
