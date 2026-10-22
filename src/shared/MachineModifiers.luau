@@ -172,6 +172,8 @@ function MachineModifiers.describe(modifierId: string, category: string?): strin
 	end
 	if category == "Producer" then
 		return `{modifier.DisplayName}: ×{modifier.DropperValueMultiplier} cube value`
+	elseif category == "Seller" then
+		return `{modifier.DisplayName}: +{modifier.MultiplierBonus}× on every sale`
 	end
 	return `{modifier.DisplayName}: +{modifier.MultiplierBonus}× multiplier`
 end
@@ -211,9 +213,11 @@ function MachineModifiers.apply(base: { [string]: any }, modifierIds: { string }
 			derived.BonusMultiplier = base.BonusMultiplier + bonus
 		end
 	else
-		-- Upgraders add the bonus wherever they apply a multiplier; machines with no value
-		-- effect of their own (the Duplicator) gain one.
-		if base.Behavior == "RandomMultiplier" and base.BonusChance then
+		-- Upgraders add the bonus wherever they apply a multiplier. The Duplicator counts as
+		-- 2× (two cubes), so each cube gets (2 + bonus) / 2: Golden 3× total, Quantum 7×.
+		if base.Behavior == "DuplicateItem" then
+			derived.Multiplier = (2 + bonus) / 2
+		elseif base.Behavior == "RandomMultiplier" and base.BonusChance then
 			derived.BonusMultiplier = addBonus(base.BonusMultiplier, bonus)
 		elseif base.Behavior == "RandomMultiplier" then
 			derived.HighMultiplier = addBonus(base.HighMultiplier, bonus)

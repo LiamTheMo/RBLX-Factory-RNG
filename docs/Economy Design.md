@@ -131,7 +131,7 @@ Every roll also rolls each modifier independently on the chosen machine (`src/sh
 
 - A modified machine is stored as a variant key: the base ID plus its modifiers in canonical order (`Seller+Golden+Quantum`). Inventory, layout, saves and remotes carry it like any machine ID; `MachineDefinitions.get` builds and caches the modified definition, and accepts only canonical keys of rollable machines.
 - Displayed odds multiply the machine's odds by each modifier's chance (a 1/10 machine is 1/1,000 when Golden). Rarity stays the base machine's. Luck does not change modifier chances.
-- Upgraders add the bonus wherever they apply a multiplier: type upgraders only to their cube type, chance upgraders only on a hit, the alternating Lucky Modifier to both outcomes. The Duplicator, which has no multiplier, gains `1 + bonus`. Sellers add the bonus to every sale: their special payout and the ordinary ×1 alike.
+- Upgraders add the bonus wherever they apply a multiplier: type upgraders only to their cube type, chance upgraders only on a hit, the alternating Lucky Modifier to both outcomes. The Duplicator counts as 2× (two cubes), so each cube gets `(2 + bonus) / 2` (Golden 3× in total, Quantum 7×). Sellers add the bonus to every sale: their special payout and the ordinary ×1 alike.
 - Conflicts: a modifier may list `ConflictsWith`; such modifiers never share a machine, the rarer roll wins, and keys combining them are rejected. None of the current three conflict.
 - Item value stays capped by `FactoryConfig.MaxItemValue`.
 

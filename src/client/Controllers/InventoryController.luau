@@ -428,6 +428,8 @@ function InventoryController.start()
 			badges.Position = UDim2.fromOffset(6, 6)
 			badges.Size = UDim2.new(1, -12, 1, -12)
 			badges.ZIndex = 2
+			-- Narrow phone rows: never let a badge spill over the card text.
+			badges.ClipsDescendants = true
 			badges.Parent = well
 			local badgeList = Instance.new("UIListLayout")
 			badgeList.Padding = UDim.new(0, 4)
@@ -440,7 +442,7 @@ function InventoryController.start()
 			for order, modifierId in ipairs(definition.Modifiers or {}) do
 				local modifier = MachineModifiers.get(modifierId)
 				if modifier then
-					GlassUI.chip(badges, modifier.Id, string.upper(modifier.DisplayName), GlassUI.fromRgb(modifier.Color), 11).LayoutOrder = order
+					GlassUI.chip(badges, modifier.Id, string.upper(modifier.DisplayName), GlassUI.fromRgb(modifier.Color), 10).LayoutOrder = order
 				end
 			end
 		end

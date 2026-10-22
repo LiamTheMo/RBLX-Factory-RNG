@@ -47,7 +47,7 @@ expect(near(get("ValueMultiplier+Quantum").Multiplier, 7), "Quantum turns 2× in
 expect(near(get("ValueMultiplier+Golden+Overclocked+Quantum").Multiplier, 11), "all three modifiers stack")
 expect(near(get("LuckyLantern+Golden").BonusMultiplier, 3), "chance upgraders boost their bonus")
 expect(near(get("LuckyModifier+Golden").HighMultiplier, 4) and near(get("LuckyModifier+Golden").LowMultiplier, 1.5), "alternating upgraders boost both outcomes")
-expect(near(get("Duplicator+Golden").Multiplier, 2), "the Duplicator gains a multiplier")
+expect(near(get("Duplicator+Golden").Multiplier, 1.5) and near(get("Duplicator+Quantum").Multiplier, 3.5), "the Duplicator counts as 2×: Golden 3× and Quantum 7× across both cubes")
 
 -- Droppers: ×2, ×4, ×5 base cube value, stacking.
 local fast = get("FastDropper")
@@ -69,7 +69,8 @@ expect(string.find(golden.Description, "Golden: +1× multiplier", 1, true) ~= ni
 expect(MachineEffects.tag(golden) == "3× All", "effect tags use the modified multiplier")
 expect(MachineEffects.tag(get("FastDropper+Golden")) == "Makes Standard · ×2", "dropper tags show the value boost")
 expect(MachineEffects.tag(get("LuckyModifier+Golden")) == "4× or 1.5× All", "alternating tags show both boosted outcomes")
-expect(MachineEffects.tag(get("Duplicator+Golden")) == "2× All · +1 Cube", "duplicator tags show the new multiplier")
+expect(MachineEffects.tag(get("Duplicator+Golden")) == "1.5× All · +1 Cube", "duplicator tags show the new multiplier")
+expect(string.find(get("Seller+Golden").Description, "Golden: +1× on every sale", 1, true) ~= nil, "seller descriptions say every sale gets the bonus")
 expect(MachineEffects.role(get("Seller+Quantum")).Name == "Seller", "modified machines keep their role")
 local combos = { { "Golden" }, { "Overclocked" }, { "Quantum" }, { "Golden", "Overclocked", "Quantum" } }
 for id, definition in pairs(MachineDefinitions.all()) do
@@ -153,7 +154,9 @@ expect(near(earnings({ "FastDropper", "ValueMultiplier+Golden", "Seller" }, 0.5)
 expect(near(earnings({ "FastDropper", "ValueMultiplier", "Seller+Golden" }, 0.5), plainCoins * 2), "a Golden seller pays double on a ×1 sale")
 expect(near(earnings({ "FastDropper+Golden", "ValueMultiplier", "Seller" }, 0.5), plainCoins * 2), "a Golden dropper doubles cube value")
 expect(near(earnings({ "FastDropper+Quantum", "ValueMultiplier+Quantum", "Seller+Quantum" }, 0.5), plainCoins * 5 * 3.5 * 6), "Quantum stacks across the route")
-expect(near(earnings({ "FastDropper", "Duplicator+Golden", "Seller" }, 0.5), earnings({ "FastDropper", "Duplicator", "Seller" }, 0.5) * 2), "a Golden Duplicator doubles both cubes")
+expect(near(earnings({ "FastDropper", "Duplicator+Golden", "Seller" }, 0.5), earnings({ "FastDropper", "Duplicator", "Seller" }, 0.5) * 1.5), "a Golden Duplicator's cubes are each worth 1.5×")
+local early = assert(MachineDefinitions.get("ParcelDesk+Overclocked"))
+expect(early.SaleModifiers ~= nil and early.VisualStyle == "Seller", "variants carry the base defaults")
 
 -- Saves keep modified machines and drop invalid keys.
 local saved = SaveSchema.sanitize({

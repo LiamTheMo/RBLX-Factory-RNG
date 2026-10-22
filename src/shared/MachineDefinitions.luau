@@ -182,6 +182,19 @@ local definitions: { [string]: MachineDefinition } = {
 	FestivalTreasury = { Id = "FestivalTreasury", DisplayName = "Festival Treasury", Category = "Seller", Description = "Every 5th completed sale pays x3; otherwise x1. Accepts one sale every 1.4s.", Rarity = "Legendary", Rollable = true, RollWeight = 1, Behavior = "StreakPayout", PayoutMultiplier = 1, SaleIntervalSeconds = 1.4, VisualStyle = "Seller", BonusEvery = 5, BonusMultiplier = 3 },
 }
 
+-- Fill derived defaults at load, before any modified variant copies a definition.
+for _, definition in pairs(definitions) do
+	definition.VisualStyle = definition.VisualStyle or (if definition.Category == "Producer" then "Dropper" elseif definition.Category == "Seller" then "Seller" else "Processor")
+	if definition.Category == "Producer" then
+		local cubeType = definition.CubeType or "Standard"
+		local typeDefinition = CubeTypeDefinitions.get(cubeType)
+		definition.OutputType = cubeType
+		definition.TypeModifiers = definition.TypeModifiers or { AdditiveBonus = 0, Multiplier = typeDefinition and typeDefinition.ValueMultiplier or 1 }
+	elseif definition.Category == "Seller" then
+		definition.SaleModifiers = definition.SaleModifiers or { AdditiveBonus = 0, Multiplier = 1 }
+	end
+end
+
 local MachineDefinitions = {}
 
 -- Modified machines are built on first use. Only canonical keys of rollable machines
@@ -262,15 +275,6 @@ function MachineDefinitions.validate(): (boolean, string?)
 	local sellerCount = 0
 	local rarities = { Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true }
 	for machineId, definition in pairs(definitions) do
-		definition.VisualStyle = definition.VisualStyle or (if definition.Category == "Producer" then "Dropper" elseif definition.Category == "Seller" then "Seller" else "Processor")
-		if definition.Category == "Producer" then
-			local cubeType = definition.CubeType or "Standard"
-			local typeDefinition = CubeTypeDefinitions.get(cubeType)
-			definition.OutputType = cubeType
-			definition.TypeModifiers = definition.TypeModifiers or { AdditiveBonus = 0, Multiplier = typeDefinition and typeDefinition.ValueMultiplier or 1 }
-		elseif definition.Category == "Seller" then
-			definition.SaleModifiers = definition.SaleModifiers or { AdditiveBonus = 0, Multiplier = 1 }
-		end
 		if definition.Id ~= machineId then
 			return false, `Machine ID mismatch for {machineId}`
 		end
