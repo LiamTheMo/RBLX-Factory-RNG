@@ -134,6 +134,8 @@ Every roll also rolls each modifier independently on the chosen machine (`src/sh
 - Upgraders add the bonus wherever they apply a multiplier: type upgraders only to their cube type, chance upgraders only on a hit, the alternating Lucky Modifier to both outcomes. The Duplicator counts as 2× (two cubes), so each cube gets `(2 + bonus) / 2` (Golden 3× in total, Quantum 7×). Sellers add the bonus to every sale: their special payout and the ordinary ×1 alike.
 - Conflicts: a modifier may list `ConflictsWith`; such modifiers never share a machine, the rarer roll wins, and keys combining them are rejected. None of the current three conflict.
 - Item value stays capped by `FactoryConfig.MaxItemValue`.
+- Confirmed by the owner (2026-10-22): sellers get the bonus on every sale; conditional upgraders only when their condition applies; Luck does not change modifier chances; rarity stays the base machine's.
+- Inventory cards tag each modifier (GOLDEN, OVERCLOCKED, QUANTUM) under the role badge in the preview corner, name the machine after its modifiers and show odds including them; the Studio smoke harness grants a Golden machine and checks all three.
 
 ### Where content is obtainable (roll sources)
 
