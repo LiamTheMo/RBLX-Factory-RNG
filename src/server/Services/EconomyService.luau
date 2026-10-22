@@ -11,6 +11,7 @@ local FactoryConfig = require(Shared:WaitForChild("FactoryConfig"))
 local MachineDefinitions = require(Shared:WaitForChild("MachineDefinitions"))
 local MachineModifiers = require(Shared:WaitForChild("MachineModifiers"))
 local RollSources = require(Shared:WaitForChild("RollSources"))
+local UpgradeRules = require(Shared:WaitForChild("UpgradeRules"))
 local FactoryService = require(script.Parent.FactoryService)
 local AnalyticsService = require(script.Parent.AnalyticsService)
 local EffectService = require(script.Parent.EffectService)
@@ -88,6 +89,8 @@ local function getProfile(player: Player): any
 			SaleValueAdditiveBonus = 0,
 			SaleValueMultiplier = 1,
 			SaleValueExpiresAt = 0,
+			Upgrades = {},
+			AutoRecycleBelow = 0,
 		}
 		profiles[player] = profile
 		player:SetAttribute("FactoryLuckMultiplier", 1)
@@ -98,6 +101,26 @@ local function getProfile(player: Player): any
 	end
 	return profile
 end
+-- Publishes upgrade effects other services read (FactoryService applies the sale multiplier).
+local function publishUpgrades(player: Player, profile: any)
+	player:SetAttribute("FactoryUpgradeSaleMultiplier", UpgradeRules.saleMultiplier(profile.Upgrades))
+end
+
+-- Upgrades and settings live in the save; bumping this lets DataService save soon after a change.
+local function markEconomyChanged(player: Player)
+	player:SetAttribute("FactoryEconomyRevision", (player:GetAttribute("FactoryEconomyRevision") or 0) + 1)
+end
+
+-- Booster luck times the permanent Lucky Rolls upgrade, capped by EconomyConfig.
+local function effectiveLuck(player: Player, profile: any): number
+	local booster = refreshLuck(player, profile, false)
+	return math.min(booster * UpgradeRules.luckMultiplier(profile.Upgrades), EconomyConfig.MaxLuckMultiplier)
+end
+
+local function rollCooldown(profile: any): number
+	return UpgradeRules.rollCooldown(EconomyConfig.RollCooldownSeconds, profile.Upgrades)
+end
+
 local function isRateLimited(player: Player): boolean
 	local now = os.clock()
 	local previous = lastRequestAt[player] or 0
@@ -140,7 +163,11 @@ local function getClientState(player: Player): { [string]: any }
 		MaxCapacity = FactoryConfig.MaxFactoryCapacity,
 		RollCount = profile.RollCount,
 		RollCost = rollCost,
-		RollCooldownSeconds = EconomyConfig.RollCooldownSeconds,
+		RollCooldownSeconds = rollCooldown(profile),
+		BaseRollCooldownSeconds = EconomyConfig.RollCooldownSeconds,
+		Upgrades = table.clone(profile.Upgrades),
+		AutoRecycleBelow = profile.AutoRecycleBelow,
+		LastRollAutoRecycled = player:GetAttribute("FactoryLastRollAutoRecycled") == true,
 		RollCooldownRemaining = EconomyRules.getRollCooldownRemaining(profile.NextRollAt, os.clock()),
 		DataReady = dataIsReady(player),
 		DataError = player:GetAttribute("FactoryDataError"),
@@ -149,6 +176,7 @@ local function getClientState(player: Player): { [string]: any }
 		LastRarity = player:GetAttribute("FactoryLastRarity"),
 		LastRollLuckMultiplier = player:GetAttribute("FactoryLastRollLuckMultiplier") or 1,
 		LuckMultiplier = luckMultiplier,
+		UpgradeLuckMultiplier = UpgradeRules.luckMultiplier(profile.Upgrades),
 		LuckExpiresAt = profile.LuckExpiresAt,
 		SaleValueAdditiveBonus = saleValueBoost.AdditiveBonus,
 		SaleValueMultiplier = saleValueBoost.Multiplier,
@@ -188,7 +216,7 @@ local function rollMachine(player: Player)
 	local now = os.clock()
 	local canRoll, reason = EconomyRules.canRoll(profile.NextRollAt, now, inventoryCount(state.inventory))
 	if not canRoll then return response(player, false, reason) end
-	local luckMultiplier = refreshLuck(player, profile, false)
+	local luckMultiplier = effectiveLuck(player, profile)
 	local conditions = RollSources.conditionsForRoll(luckMultiplier)
 	local definition, rollPool = chooseMachine(luckMultiplier, conditions)
 	if not definition then return response(player, false, "No rollable machines are configured") end
@@ -201,9 +229,17 @@ local function rollMachine(player: Player)
 		machineKey = definition.Id
 		modifierIds = {}
 	end
-	state.inventory[machineKey] = (state.inventory[machineKey] or 0) + 1
+	-- Auto-recycle compares the odds shown on cards (ordinary roll, no luck, modifiers included).
+	local shownOdds = EconomyRules.getMachineOddsDenominator(machineKey, MachineDefinitions.getRollPool())
+	local autoRecycled = EconomyRules.shouldAutoRecycle(shownOdds, profile.AutoRecycleBelow)
+	if autoRecycled then
+		AnalyticsService.record(player, "MachineAutoRecycled")
+	else
+		state.inventory[machineKey] = (state.inventory[machineKey] or 0) + 1
+	end
 	profile.RollCount += 1
-	profile.NextRollAt = now + EconomyConfig.RollCooldownSeconds
+	profile.NextRollAt = now + rollCooldown(profile)
+	player:SetAttribute("FactoryLastRollAutoRecycled", autoRecycled)
 	player:SetAttribute("FactoryLastRoll", machineKey)
 	player:SetAttribute("FactoryLastRarity", rarity)
 	player:SetAttribute("FactoryLastRollLuckMultiplier", luckMultiplier)
@@ -275,6 +311,38 @@ local function buyCapacity(player: Player)
 	return response(player, true)
 end
 
+local function buyUpgrade(player: Player, upgradeId: any)
+	local state = getState(player)
+	if not state then return { Success = false, Reason = "Factory is not ready" } end
+	if not dataIsReady(player) then return response(player, false, "Factory data is loading") end
+	if isRateLimited(player) then return response(player, false, "Too many requests") end
+	local upgrade = UpgradeRules.get(upgradeId)
+	if not upgrade then return response(player, false, "Unknown upgrade") end
+	local profile = getProfile(player)
+	local cost = UpgradeRules.nextCost(profile.Upgrades, upgrade.Id)
+	if not cost then return response(player, false, "Upgrade is already maxed") end
+	if not state.simulation:tryDebitCoins(cost) then return response(player, false, "Not enough Coins") end
+	profile.Upgrades[upgrade.Id] = UpgradeRules.level(profile.Upgrades, upgrade.Id) + 1
+	publishUpgrades(player, profile)
+	markEconomyChanged(player)
+	AnalyticsService.record(player, "UpgradePurchased_" .. upgrade.Id)
+	return response(player, true)
+end
+
+local function setAutoRecycle(player: Player, threshold: any)
+	local state = getState(player)
+	if not state then return { Success = false, Reason = "Factory is not ready" } end
+	if not dataIsReady(player) then return response(player, false, "Factory data is loading") end
+	if isRateLimited(player) then return response(player, false, "Too many requests") end
+	if type(threshold) ~= "number" or threshold ~= threshold or (threshold ~= 0 and threshold < 2) then
+		return response(player, false, "Enter odds like 1/1000, or Off")
+	end
+	local profile = getProfile(player)
+	profile.AutoRecycleBelow = EconomyRules.sanitizeAutoRecycle(threshold)
+	markEconomyChanged(player)
+	return response(player, true)
+end
+
 function EconomyService.grantLuckBoost(player: Player, multiplier: number, durationSeconds: number): boolean
 	if not dataIsReady(player) or type(multiplier) ~= "number" or multiplier ~= multiplier
 		or type(durationSeconds) ~= "number" or durationSeconds ~= durationSeconds
@@ -318,7 +386,11 @@ function EconomyService.getPersistentState(player: Player): { [string]: any }?
 	if not profile then
 		return nil
 	end
-	return { RollCount = profile.RollCount }
+	return {
+		RollCount = profile.RollCount,
+		Upgrades = table.clone(profile.Upgrades),
+		Settings = { AutoRecycleBelow = profile.AutoRecycleBelow },
+	}
 end
 
 function EconomyService.applyPersistentState(player: Player, data: { [string]: any }): (boolean, string?)
@@ -327,6 +399,9 @@ function EconomyService.applyPersistentState(player: Player, data: { [string]: a
 		return false, "Invalid economy data"
 	end
 	profile.RollCount = math.min(data.RollCount, 100_000)
+	profile.Upgrades = UpgradeRules.sanitize(data.Upgrades)
+	profile.AutoRecycleBelow = EconomyRules.sanitizeAutoRecycle(type(data.Settings) == "table" and data.Settings.AutoRecycleBelow)
+	publishUpgrades(player, profile)
 	return true
 end
 
@@ -346,6 +421,8 @@ local function createRemotes()
 	remoteFunction("RollMachine").OnServerInvoke = rollMachine
 	remoteFunction("SellMachine").OnServerInvoke = sellMachine
 	remoteFunction("BuyCapacity").OnServerInvoke = buyCapacity
+	remoteFunction("BuyUpgrade").OnServerInvoke = buyUpgrade
+	remoteFunction("SetAutoRecycle").OnServerInvoke = setAutoRecycle
 end
 
 function EconomyService.start()

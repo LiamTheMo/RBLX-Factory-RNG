@@ -569,7 +569,7 @@ function RollReveal.mount(gui: ScreenGui)
 	end
 
 	-- Shows the result card. `info` carries display strings; `definition` enables the preview.
-	local function showResult(token: number, info: { Name: string, Rarity: string, Odds: string, Definition: any?, Luck: number?, Ultra: boolean })
+	local function showResult(token: number, info: { Name: string, Rarity: string, Odds: string, Definition: any?, Luck: number?, Ultra: boolean, AutoRecycled: boolean? })
 		if token ~= sequence then
 			return
 		end
@@ -579,7 +579,9 @@ function RollReveal.mount(gui: ScreenGui)
 		local tier = rarityTier[info.Rarity] or 1
 		title.Text = if info.Ultra then "ULTRA RARE!" else string.upper(info.Rarity) .. "!"
 		title.TextColor3 = color
-		subtitle.Text = if info.Luck and info.Luck > 1 then string.format("Luck ×%.2f applied", info.Luck) else "Added to your machines"
+		subtitle.Text = if info.AutoRecycled then "Auto-recycled by your setting"
+			elseif info.Luck and info.Luck > 1 then string.format("Luck ×%.2f applied", info.Luck)
+			else "Added to your machines"
 		heading.Text = if info.Ultra then "ULTRA RARE MACHINE!" else string.upper(info.Rarity) .. " MACHINE!"
 		heading.TextColor3 = color
 		nameCard.Text = info.Name
@@ -610,7 +612,8 @@ function RollReveal.mount(gui: ScreenGui)
 			effectChip.Size = UDim2.fromOffset(0, 26)
 		end
 		description.Text = if definition then definition.Description else ""
-		footnote.Text = if definition then `Found in: {MachineDefinitions.describeSources(definition)}  ·  Click a conveyor slot to place it` else "Click a conveyor slot to place it"
+		local nextStep = if info.AutoRecycled then "Change auto-recycle in Settings" else "Click a conveyor slot to place it"
+		footnote.Text = if definition then `Found in: {MachineDefinitions.describeSources(definition)}  ·  {nextStep}` else nextStep
 		for _, child in ipairs(modifierBadges:GetChildren()) do
 			if child:IsA("GuiObject") then
 				child:Destroy()
@@ -750,7 +753,7 @@ function RollReveal.mount(gui: ScreenGui)
 		runSpinLoop(sequence)
 	end
 
-	function api.rolled(machineId: string?, rarityOverride: string?, luck: number?)
+	function api.rolled(machineId: string?, rarityOverride: string?, luck: number?, autoRecycled: boolean?)
 		local token = sequence
 		if phase ~= "Spinning" then
 			sequence += 1
@@ -772,6 +775,7 @@ function RollReveal.mount(gui: ScreenGui)
 			Definition = definition,
 			Luck = luck,
 			Ultra = EconomyRules.shouldPlayUltraRareCutscene(denominator),
+			AutoRecycled = autoRecycled == true,
 		}
 		-- Ease from the current speed onto a card ~SPIN_SPEED*LAND/3 cards ahead (cubic ease-out
 		-- starts at exactly the spin speed), then paint the server result into that card.
