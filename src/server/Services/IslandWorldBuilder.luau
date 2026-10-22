@@ -1,12 +1,12 @@
 --!nonstrict
 -- Builds the island world. Preferred path: clone the imported low-poly island (and hub, when
 -- modeled) from ServerStorage.IslandAssets per plot, scatter the lagoon with islets, stepped rock
--- clusters and small islands (ParkourLayout.field), and fill Terrain water. Fallback: the original
+-- clusters and small islands (LagoonLayout.field), and fill the water. Fallback: the original
 -- native-part map, so a place without the imported models still runs.
 local ServerStorage = game:GetService("ServerStorage")
 local Shared = game:GetService("ReplicatedStorage").Shared
 local Config = require(Shared.IslandWorldConfig)
-local ParkourLayout = require(Shared.ParkourLayout)
+local LagoonLayout = require(Shared.LagoonLayout)
 local IsletCatalog = require(Shared.IsletCatalog)
 local Builder = {}
 local C = {
@@ -439,12 +439,21 @@ end
 
 local WATERLINE=Config.WaterY+Config.Templates.WaterlineLift
 
+-- Flat foam on the water: the rim ("... | Foam", "Foam | shore froth") and the surf beyond it
+-- ("... | Surf", "Foam | shore surf"), which the client swells like lapping waves.
+local function isSurf(name)
+	return string.find(name,"| Surf",1,true)~=nil or string.find(name,"Foam | shore surf",1,true)~=nil
+end
+local function isFoam(name)
+	return string.find(name,"Foam",1,true)~=nil or isSurf(name)
+end
+
 -- Scales a placed model about its waterline pivot at (x, z): `sxz` across, `sy` up. Foam stays
 -- flat on the water.
 local function scaleAbout(model, x, z, sxz, sy)
 	for _,p in model:GetDescendants() do
 		if p:IsA("BasePart") then
-			local foam=string.find(p.Name,"Foam",1,true)~=nil
+			local foam=isFoam(p.Name)
 			local y=if foam then 1 else sy
 			local pos=p.Position
 			p.Size=Vector3.new(p.Size.X*sxz,p.Size.Y*y,p.Size.Z*sxz)
@@ -453,13 +462,13 @@ local function scaleAbout(model, x, z, sxz, sy)
 	end
 end
 
--- One walkable islet whose grass top lands exactly on the pad height: the closest-height variant,
+-- One walkable islet whose rock top lands exactly on the pad height (see the variant choice below),
 -- stretched a little in Y about the waterline and scaled across by `scale`, so the lagoon mixes
 -- small stepping rocks with broad ones.
-local function placeIslet(parent, walkable, pad, yaw, pick, scale)
+local function placeIslet(parent, walkable, pad, yaw, pick, scale, aspect)
 	local want=pad.Y-WATERLINE
 	if #walkable==0 then
-		local size=Config.Parkour.PadSize*scale+1.5
+		local size=Config.Lagoon.IsletSize*scale+1.5
 		local rock=part(parent,"IsletRock",Vector3.new(size,want+3.4,size),CFrame.new(pad.X,(pad.Y-0.6+WATERLINE-4)/2,pad.Z)*CFrame.Angles(0,yaw,0),C.Rock,Enum.Material.Slate,true)
 		rock.CastShadow=false
 		part(parent,"IsletTop",Vector3.new(size-0.6,0.6,size-0.6),CFrame.new(pad.X,pad.Y-0.3,pad.Z)*CFrame.Angles(0,yaw,0),C.Grass,Enum.Material.Grass,true)
@@ -469,22 +478,32 @@ local function placeIslet(parent, walkable, pad, yaw, pick, scale)
 	-- keep their proportions instead of being squashed); only above the tallest one is stretched.
 	local best,score=nil,math.huge
 	for k,entry in walkable do
-		local s=(if entry.top>=want-0.05 then entry.top else 1000-entry.top)+(if (k+pick)%2==0 then 0 else 0.01)
+		-- Equal-height variants rotate with the pick, so every variant shows up across the lagoon.
+		local s=(if entry.top>=want-0.05 then entry.top else 1000-entry.top)+((k*7+pick)%#walkable)*0.001
 		if s<score then best,score=entry,s end
 	end
 	local model=best.model:Clone()
 	model:PivotTo(CFrame.new(pad.X,WATERLINE,pad.Z)*CFrame.Angles(0,yaw,0))
 	scaleAbout(model,pad.X,pad.Z,scale,math.max(1,want/best.top))
+	-- Stretched along its own X axis (the layout widened its footprint to match): lopsided, not round.
+	local pivot=model:GetPivot()
+	for _,p in model:GetDescendants() do
+		if p:IsA("BasePart") then
+			local rel=pivot:ToObjectSpace(p.CFrame)
+			p.CFrame=pivot*CFrame.new(rel.Position.X*(aspect or 1),rel.Position.Y,rel.Position.Z)*rel.Rotation
+			p.Size=Vector3.new(p.Size.X*(aspect or 1),p.Size.Y,p.Size.Z)
+		end
+	end
 	local sink=math.max(0,best.top-want)
 	for _,p in model:GetDescendants() do
-		if p:IsA("BasePart") and not string.find(p.Name,"Foam",1,true) then
+		if p:IsA("BasePart") and not isFoam(p.Name) then
 			p.Position-=Vector3.new(0,sink,0)
 		end
 	end
 	model.Parent=parent
 end
 
--- A stepped cluster or small island exactly as ParkourLayout placed its walkable tops. Without
+-- A stepped cluster or small island exactly as LagoonLayout placed its walkable tops. Without
 -- the model, each top becomes a loose islet so the layout stays reachable.
 local function placeShape(parent, walkable, shapes, piece, pick)
 	local template=shapes[piece.Shape]
@@ -494,7 +513,7 @@ local function placeShape(parent, walkable, shapes, piece, pick)
 				local c,s=math.cos(piece.Yaw),math.sin(piece.Yaw)
 				for k,t in shape.Tops do
 					local pad={X=piece.X+(t.X*c+t.Z*s)*piece.ScaleXZ,Y=WATERLINE+t.Y*piece.ScaleY,Z=piece.Z+(-t.X*s+t.Z*c)*piece.ScaleXZ}
-					placeIslet(parent,walkable,pad,piece.Yaw,pick+k,math.max(1,t.W*piece.ScaleXZ/Config.Parkour.PadSize))
+					placeIslet(parent,walkable,pad,piece.Yaw,pick+k,math.max(1,t.W*piece.ScaleXZ/Config.Lagoon.IsletSize))
 				end
 			end
 		end
@@ -508,7 +527,7 @@ end
 
 local function scatterBoulders(world, boulders, keepOut)
 	local S=Config.Scatter
-	local rocks=ParkourLayout.scatter(97,S.Count,S.Radius,keepOut,S.MinSpacing,math.max(#boulders,1))
+	local rocks=LagoonLayout.scatter(97,S.Count,S.Radius,keepOut,S.MinSpacing,math.max(#boulders,1))
 	local folder=Instance.new("Folder")
 	folder.Name="LagoonRocks"
 	for _,rock in rocks do
@@ -610,7 +629,7 @@ local function buildWaterSurface(world)
 	for i=0,count-1 do
 		for j=0,count-1 do
 			local x,z=-S.Size/2+side*(i+0.5),-S.Size/2+side*(j+0.5)
-			local sheet=part(folder,"WaterSurface",Vector3.new(side,1,side),CFrame.new(x,Config.WaterY-0.5,z),rgb(S.ColorRGB))
+			local sheet=part(folder,"WaterSurface",Vector3.new(side,1,side),CFrame.new(x,Config.WaterY-S.Drop-0.5,z),rgb(S.ColorRGB))
 			-- Over the terrain floor the water is see-through; beyond it, opaque (nothing below).
 			local overFloor=math.abs(x)<W.Size/2 and math.abs(z)<W.Size/2
 			sheet.Transparency=1
@@ -663,83 +682,41 @@ local function buildFromTemplates(world, islandTemplate)
 		warn("[IslandWorldBuilder] ServerStorage."..Config.Templates.Folder.."."..Config.Templates.Islets.." has no Islet_* models; using placeholder rocks")
 	end
 	local mounds={}
-	local F=Config.Field
-	local hubY=Config.getHubGroundY()
+	local L=Config.Lagoon
 
-	-- Measured around the hub and every island: walkable ledges (ground mesh only, so trees and
-	-- roofs are ignored), the shoreline at every bearing (any part that takes queries, so not the
-	-- foam) for keep-out fans that hug the real coast, and each dock's far end as a low way on.
-	local function bearings(n)
-		local list={}
-		for k=0,n-1 do table.insert(list,k*math.pi*2/n) end
-		return list
-	end
-	local function ledges(model, centre, y)
-		local points={}
-		for _,a in bearings(F.LedgeSamples) do
-			local e=findEdge(model,centre,Vector3.new(math.cos(a),0,math.sin(a)),y-3)
-			table.insert(points,{X=e.X,Y=y,Z=e.Z})
-		end
-		return points
-	end
+	-- The shoreline of the hub and every island at L.ShoreSamples bearings (any part that takes
+	-- queries, so not the foam), for keep-out fans that hug the real coast.
 	local keepOut,scatterKeepOut={},{}
 	local function shoreFan(model, centre)
 		local angles,distances={},{}
-		for _,a in bearings(F.ShoreSamples) do
+		for k=0,L.ShoreSamples-1 do
+			local a=k*math.pi*2/L.ShoreSamples
 			local e=findEdge(model,centre,Vector3.new(math.cos(a),0,math.sin(a)),WATERLINE-6)
 			table.insert(angles,a)
 			table.insert(distances,math.max(4,Vector3.new(e.X-centre.X,0,e.Z-centre.Z).Magnitude))
 		end
 		local S=Config.Scatter
-		for _,circle in ParkourLayout.shoreFan(centre.X,centre.Z,angles,distances,S.ShoreClearance) do
+		for _,circle in LagoonLayout.shoreFan(centre.X,centre.Z,angles,distances,S.ShoreClearance) do
 			table.insert(keepOut,circle)
 		end
-		for _,circle in ParkourLayout.shoreFan(centre.X,centre.Z,angles,distances,S.BoulderShoreClearance) do
+		for _,circle in LagoonLayout.shoreFan(centre.X,centre.Z,angles,distances,S.BoulderShoreClearance) do
 			table.insert(scatterKeepOut,circle)
 		end
 	end
-	local function dockEnd(dock, centre)
-		-- The bounding-box corner farthest from the clearing, walked back onto the deck.
-		local far,reach=nil,-1
-		for _,sx in {-1,1} do
-			for _,sz in {-1,1} do
-				local corner=dock.CFrame:PointToWorldSpace(Vector3.new(sx*dock.Size.X/2,0,sz*dock.Size.Z/2))
-				local d=Vector3.new(corner.X-centre.X,0,corner.Z-centre.Z).Magnitude
-				if d>reach then far,reach=corner,d end
-			end
-		end
-		for t=0.05,0.95,0.05 do
-			local p=far:Lerp(dock.Position,t)
-			local hit=workspace:Raycast(Vector3.new(p.X,dock.Position.Y+40,p.Z),Vector3.new(0,-80,0),only(dock))
-			if hit then return {X=hit.Position.X,Y=hit.Position.Y,Z=hit.Position.Z} end
-		end
-		return nil
-	end
-	local hubCentre=Vector3.new(hubBox.X,hubY,hubBox.Z)
-	local anchors={{Ledges=ledges(hubModel,hubCentre,hubY)}}
-	shoreFan(hubModel,hubCentre)
+	shoreFan(hubModel,Vector3.new(hubBox.X,Config.getHubGroundY(),hubBox.Z))
 	for index,islandModel in islands do
 		local c=Config.getIslandCenter(index)
-		local centre=Vector3.new(c.X,Config.GroundY,c.Z)
-		local points=ledges(walkableGround(islandModel),centre,Config.GroundY)
-		local dock=islandModel:FindFirstChild(Config.Templates.DockPart,true)
-		local deck=dock and dock:IsA("BasePart") and dockEnd(dock,centre)
-		if deck then table.insert(points,deck) end
-		table.insert(anchors,{Ledges=points})
-		shoreFan(islandModel,centre)
+		shoreFan(islandModel,Vector3.new(c.X,Config.GroundY,c.Z))
 	end
 
-	-- The noise field: loose islets, stepped clusters and small islands at varied heights
-	-- everywhere, bridged only where something is cut off.
-	local islets,pieces=ParkourLayout.field(F.Seed,anchors,keepOut,Config.landingHeight,F,Config.Parkour,IsletCatalog)
-	if not ParkourLayout.allConnected(anchors,islets,Config.Parkour) then
-		warn("[IslandWorldBuilder] lagoon parkour leaves an island or the hub unreachable; raise Field.MaxRepairs or MaxPieces")
-	end
+	-- The lagoon noise: misshapen islets, stepped clusters and small islands at random spots and
+	-- noise heights. Scenery only; nothing links the islands or reaches the hub.
+	local _,pieces=LagoonLayout.field(L.Seed,keepOut,L,IsletCatalog)
 	local field=Instance.new("Model")
-	field.Name="ParkourIslets"
+	field.Name="LagoonIslets"
 	for i,piece in pieces do
 		if piece.Kind=="Islet" then
-			placeIslet(field,walkable,piece,piece.Yaw,i,piece.ScaleXZ)
+			placeIslet(field,walkable,piece,piece.Yaw,i,piece.ScaleXZ,piece.Aspect)
 		else
 			placeShape(field,walkable,shapes,piece,i)
 		end
@@ -762,6 +739,27 @@ local function buildFromTemplates(world, islandTemplate)
 	else
 		buildWater(centers,mounds,true)
 		buildCaustics(world,centers)
+	end
+	-- Foam is white of varying transparency: the alpha foam texture laces every foam part, the rim
+	-- stays dense and the surf beyond it lighter. Foam is shadowless and never collidable or
+	-- queryable; surf parts are tagged for the client's swell. Older island templates carried a
+	-- turquoise shallow-water halo, which is removed (foam is white only).
+	local F=Config.Foam
+	local CollectionService=game:GetService("CollectionService")
+	for i,p in world:GetDescendants() do
+		if p:IsA("BasePart") and isFoam(p.Name) then
+			if p.Name==F.RetiredHalo then
+				p:Destroy()
+			else
+				local surf=isSurf(p.Name)
+				p.Transparency=if surf then F.SurfTransparency else F.RimTransparency
+				if F.TextureId~="" and p:IsA("MeshPart") then p.TextureID=F.TextureId end
+				p.CastShadow=false
+				p.CanCollide,p.CanQuery,p.CanTouch=false,false,false
+				if surf then CollectionService:AddTag(p,F.SurfTag) end
+			end
+		end
+		if i%2000==0 then task.wait() end
 	end
 end
 
