@@ -15,6 +15,7 @@ local BoosterConfig = require(Shared:WaitForChild("BoosterConfig"))
 local HudLayout = require(Shared:WaitForChild("HudLayout"))
 local ModelBuilder = require(Shared:WaitForChild("MachineModelBuilder"))
 local MachineEffects = require(Shared:WaitForChild("MachineEffects"))
+local MachineModifiers = require(Shared:WaitForChild("MachineModifiers"))
 
 local GlassUI = require(script.Parent.GlassUI)
 
@@ -349,6 +350,8 @@ function InventoryController.start()
 		local oddsLabel = GlassUI.label(card, if name:sub(1, 8) == "Booster_" then "BoosterEffect" else "RollOdds", odds, 12, Theme.Fonts.Medium)
 		oddsLabel.Position = UDim2.new(infoX, 10, 0, infoTop + 54)
 		oddsLabel.Size = UDim2.new(1 - infoX, -20, 0, 16)
+		oddsLabel.TextWrapped = false
+		oddsLabel.TextTruncate = Enum.TextTruncate.AtEnd
 		oddsLabel.TextXAlignment = nameLabel.TextXAlignment
 		local detailLabel = GlassUI.label(card, if name:sub(1, 8) == "Booster_" then "BoosterDetails" else "MachineDetails", details, 11)
 		detailLabel.Position = UDim2.new(infoX, 10, 0, infoTop + 72)
@@ -412,17 +415,33 @@ function InventoryController.start()
 		local name = if isPlacement then string.format("Place_%s_%d", machineId, order) else "Owned_" .. machineId
 		-- The chip carries what the machine does (rarity-tinted); rarity and odds share the line below.
 		local effect = if definition then MachineEffects.tag(definition) else rarity
-		local oddsText = if odds and odds ~= "Starter" then `{rarity} · Odds {odds}` else `{rarity} · Starter`
+		-- Odds include any modifiers (Golden 1/100 turns 1/10 into 1/1,000); the source says where to roll it.
+		local oddsText = if odds and odds ~= "Starter" then `{rarity} · Odds {odds} · {MachineDefinitions.describeSources(definition)}` else `{rarity} · Starter`
 		local card, well, actions = makeCard(name, order, rarityColor(rarity), definition and definition.DisplayName or machineId, effect, oddsText, details)
 		card:SetAttribute("Description", definition and definition.Description or "")
 		if definition then
 			addPreview(well, definition)
+			-- Corner badges on the preview: the machine's job, then any rolled modifiers.
+			local badges = Instance.new("Frame")
+			badges.Name = "Badges"
+			badges.BackgroundTransparency = 1
+			badges.Position = UDim2.fromOffset(6, 6)
+			badges.Size = UDim2.new(1, -12, 1, -12)
+			badges.ZIndex = 2
+			badges.Parent = well
+			local badgeList = Instance.new("UIListLayout")
+			badgeList.Padding = UDim.new(0, 4)
+			badgeList.SortOrder = Enum.SortOrder.LayoutOrder
+			badgeList.Parent = badges
 			local role = MachineEffects.role(definition)
 			if role then
-				-- Corner badge on the preview: what job the machine does on the belt.
-				local roleChip = GlassUI.chip(well, "Role", string.upper(role.Name), GlassUI.fromRgb(role.Color), 11)
-				roleChip.Position = UDim2.fromOffset(6, 6)
-				roleChip.ZIndex = 2
+				GlassUI.chip(badges, "Role", string.upper(role.Name), GlassUI.fromRgb(role.Color), 11).LayoutOrder = 0
+			end
+			for order, modifierId in ipairs(definition.Modifiers or {}) do
+				local modifier = MachineModifiers.get(modifierId)
+				if modifier then
+					GlassUI.chip(badges, modifier.Id, string.upper(modifier.DisplayName), GlassUI.fromRgb(modifier.Color), 11).LayoutOrder = order
+				end
 			end
 		end
 		return card, actions

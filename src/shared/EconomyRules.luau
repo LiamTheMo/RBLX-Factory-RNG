@@ -1,10 +1,13 @@
 --!strict
 
 local EconomyConfig
+local MachineModifiers
 if script ~= nil then
 	EconomyConfig = require(script.Parent.EconomyConfig)
+	MachineModifiers = require(script.Parent.MachineModifiers)
 else
 	EconomyConfig = require("./EconomyConfig")
+	MachineModifiers = require("./MachineModifiers")
 end
 
 local EconomyRules = {}
@@ -106,28 +109,46 @@ function EconomyRules.pickMachineId(rollPool: { [number]: any }, roll: number, r
 	return nil
 end
 
+-- Rarities only count when the pool holds a machine of that rarity, so a rarity whose
+-- machines all need a special source is never drawn in an ordinary roll.
+function EconomyRules.getRarityWeightsForPool(rollPool: { [number]: any }, rarityWeights: { [string]: number }?): { [string]: number }
+	local weights = rarityWeights or EconomyConfig.RarityWeights
+	local result = {}
+	for rarity, weight in pairs(weights) do
+		if EconomyRules.getRollPoolTotalChance(rollPool, rarity) > 0 then
+			result[rarity] = weight
+		end
+	end
+	return result
+end
+
+local function findInPool(baseId: string?, rollPool: { [number]: any }): any
+	if not baseId then return nil end
+	for _, candidate in ipairs(rollPool) do
+		if candidate.Id == baseId and candidate.Rollable == true then return candidate end
+	end
+	return nil
+end
+
+-- Accepts plain machine IDs and modified keys ("Seller+Golden"); each modifier multiplies
+-- the odds by its own chance, so a 1/10 machine is 1/1000 when Golden.
 function EconomyRules.getMachineOddsDenominator(machineId: any, rollPool: { [number]: any }, rarityWeights: { [string]: number }?): number?
 	if type(machineId) ~= "string" or type(rollPool) ~= "table" then return nil end
-	local weights = rarityWeights or EconomyConfig.RarityWeights
+	local baseId, modifierIds = MachineModifiers.parseKey(machineId)
+	local weights = EconomyRules.getRarityWeightsForPool(rollPool, rarityWeights)
 	local rarityTotal = EconomyRules.getTotalWeight(weights)
-	local definition = nil
-	for _, candidate in ipairs(rollPool) do
-		if candidate.Id == machineId and candidate.Rollable == true then definition = candidate; break end
-	end
+	local definition = findInPool(baseId, rollPool)
 	if not definition or rarityTotal <= 0 then return nil end
 	local rarityWeight = weights[definition.Rarity]
 	local innerWeight = definition.RollWeight
 	local innerTotal = EconomyRules.getRollPoolTotalChance(rollPool, definition.Rarity)
 	if not rarityWeight or not innerWeight or innerWeight <= 0 or innerTotal <= 0 then return nil end
-	return (rarityTotal * innerTotal) / (rarityWeight * innerWeight)
+	return (rarityTotal * innerTotal) / (rarityWeight * innerWeight) * MachineModifiers.oddsFactor(modifierIds)
 end
 
 function EconomyRules.getMachineRarity(machineId: any, rollPool: { [number]: any }): string?
-	if type(machineId) ~= "string" then return nil end
-	for _, definition in ipairs(rollPool) do
-		if definition.Id == machineId and definition.Rollable == true then return definition.Rarity end
-	end
-	return nil
+	local definition = findInPool((MachineModifiers.parseKey(machineId)), rollPool)
+	return definition and definition.Rarity
 end
 
 function EconomyRules.shouldPlayUltraRareCutscene(oddsDenominator: any): boolean
@@ -139,22 +160,30 @@ function EconomyRules.getMachineOddsLabel(machineId: any, rollPool: { [number]: 
 	if type(machineId) ~= "string" or type(rollPool) ~= "table" then
 		return nil
 	end
+	local baseId, modifierIds = MachineModifiers.parseKey(machineId)
 	local denominator
-	for _, definition in ipairs(rollPool) do
-		if definition.Id == machineId and type(definition.RollChance) == "number" and definition.RollChance > 0 then
-			denominator = 100 / definition.RollChance
-			break
-		end
+	local definition = findInPool(baseId, rollPool)
+	if definition and type(definition.RollChance) == "number" and definition.RollChance > 0 then
+		denominator = 100 / definition.RollChance * MachineModifiers.oddsFactor(modifierIds)
 	end
 	denominator = denominator or EconomyRules.getMachineOddsDenominator(machineId, rollPool, rarityWeights)
 	if not denominator then return nil end
+	return "1/" .. EconomyRules.formatOddsDenominator(denominator)
+end
+
+-- "40", "12.5", and digit groups from 10,000 up ("1,000,000") so long odds stay readable.
+function EconomyRules.formatOddsDenominator(denominator: number): string
 	local rounded = math.floor(denominator * 10 + 0.5) / 10
-	local denominatorText = if rounded % 1 == 0 then string.format("%.0f", rounded) else string.format("%.1f", rounded)
-	return "1/" .. denominatorText
+	if rounded < 10_000 then
+		return if rounded % 1 == 0 then string.format("%.0f", rounded) else string.format("%.1f", rounded)
+	end
+	local digits = string.format("%.0f", rounded)
+	local grouped = digits:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (grouped:gsub("^,", ""))
 end
 
 function EconomyRules.getLuckAdjustedRollPool(rollPool: { [number]: any }, luckMultiplier: any): { [number]: any }
-	local adjustedWeights = EconomyRules.getLuckAdjustedRarityWeights(EconomyConfig.RarityWeights, luckMultiplier)
+	local adjustedWeights = EconomyRules.getLuckAdjustedRarityWeights(EconomyRules.getRarityWeightsForPool(rollPool), luckMultiplier)
 	local rarityTotal = EconomyRules.getTotalWeight(adjustedWeights)
 	local result = {}
 	for _, definition in ipairs(rollPool) do

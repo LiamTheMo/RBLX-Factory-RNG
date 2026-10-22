@@ -111,6 +111,19 @@ and free rolls still go through the existing validated remotes.
   beyond 60 studs), a corner badge on each inventory card preview, and the first chip on
   the roll result.
 
+## Round 7: machine modifiers and roll sources
+
+- **Modifiers:** Golden (1/100), Overclocked (1/1,000) and Quantum (1/10,000) roll independently
+  onto every rolled machine and stack. Droppers get ×2 / ×4 / ×5 base cube value; upgraders and
+  sellers get +1 / +3 / +5 on their multiplier. See Economy Design § Machine modifiers.
+- **Odds:** cards, the reel and the roll result show odds including modifiers (1/10 Golden →
+  1/1,000); long odds are digit-grouped. A Quantum result plays the ultra-rare reveal.
+- **Presentation:** modified machines are named "Golden Value Multiplier"; modifier badges sit
+  under the role badge on cards and in the roll preview, and a modifier pill floats above the
+  role pill on placed machines. Effect tags show the modified numbers.
+- **Sources:** machines, rarities and modifiers declare where they are obtainable; cards and the
+  roll result show it ("Any roll"). Future weather, events and places plug in as sources.
+
 ## Completed / Passed
 
 - Luau compilation, all pure Luau suites (including the new layout spec across eleven
@@ -146,6 +159,11 @@ and free rolls still go through the existing validated remotes.
 - Round 4 live check: place a machine and leave within a few seconds, rejoin, and confirm
   it stayed; watch drops appear around the map about once a minute per player; read the
   effect tags on cards, the roll result and placed machines.
+
+- Round 7 live check: after deploying, restart running servers (servers still on the old code
+  drop modified machines they don't recognise). Roll until a Golden machine appears (or
+  test in Studio by granting `ValueMultiplier+Golden`), place it, check the earnings, the modifier
+  badges and pill, the odds on its card, and that it survives a rejoin.
 
 - Round 6 live check: role pills above placed machines are readable and sit clear of the
   machine and passing cubes; the inventory card badge and roll result chip read clearly

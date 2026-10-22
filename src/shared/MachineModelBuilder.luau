@@ -6,31 +6,21 @@ local Geometry = require(Shared.FactoryItemGeometry)
 local CubeTypeDefinitions = require(Shared.CubeTypeDefinitions)
 local Theme = require(Shared.HudTheme)
 local MachineEffects = require(Shared.MachineEffects)
+local MachineModifiers = require(Shared.MachineModifiers)
 local Builder = {}
 
 local function rgb(channels: { number }): Color3
 	return Color3.fromRGB(channels[1], channels[2], channels[3])
 end
 
--- Floating glass pill above the machine naming its job ("DROPPER", "UPGRADER", "SELLER").
--- Sized in studs so it shrinks with distance; hidden past MaxDistance to keep other plots tidy.
-local function addRoleLabel(model: Model, housing: Part, definition: any)
-	local role = MachineEffects.role(definition)
-	if not role then
-		return
-	end
-	local top = housing.Position.Y + housing.Size.Y / 2
-	for _, child in ipairs(model:GetChildren()) do
-		if child:IsA("BasePart") and child.Transparency < 1 then
-			top = math.max(top, child.Position.Y + child.Size.Y / 2)
-		end
-	end
-	local color = rgb(role.Color)
+-- Floating glass pill (sized in studs so it shrinks with distance; hidden past MaxDistance
+-- to keep other plots tidy).
+local function addPill(housing: Part, name: string, text: string, color: Color3, width: number, height: number)
 	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "RoleLabel"
+	billboard.Name = name
 	billboard.Adornee = housing
-	billboard.Size = UDim2.fromScale(2.6, 0.62)
-	billboard.StudsOffsetWorldSpace = Vector3.new(0, top - housing.Position.Y + 0.65, 0)
+	billboard.Size = UDim2.fromScale(width, 0.62)
+	billboard.StudsOffsetWorldSpace = Vector3.new(0, height, 0)
 	billboard.MaxDistance = 60
 	billboard.LightInfluence = 0
 	billboard.Parent = housing
@@ -51,22 +41,53 @@ local function addRoleLabel(model: Model, housing: Part, definition: any)
 	rim.Transparency = 0.2
 	rim.Parent = pill
 	local label = Instance.new("TextLabel")
-	label.Name = "Role"
+	label.Name = "Text"
 	label.AnchorPoint = Vector2.new(0.5, 0.5)
 	label.Position = UDim2.fromScale(0.5, 0.5)
 	label.Size = UDim2.fromScale(0.82, 0.72)
 	label.BackgroundTransparency = 1
-	label.Text = string.upper(role.Name)
+	label.Text = text
 	label.TextColor3 = color
 	label.FontFace = Theme.Fonts.Heavy
 	label.TextScaled = true
 	label.Parent = pill
 end
 
+-- Above the machine: its job ("DROPPER", "UPGRADER", "SELLER") and, higher up, any rolled
+-- modifiers ("GOLDEN · QUANTUM") in the rarest modifier's color.
+local function addRoleLabel(model: Model, housing: Part, definition: any)
+	local role = MachineEffects.role(definition)
+	if not role then
+		return
+	end
+	local top = housing.Position.Y + housing.Size.Y / 2
+	for _, child in ipairs(model:GetChildren()) do
+		if child:IsA("BasePart") and child.Transparency < 1 then
+			top = math.max(top, child.Position.Y + child.Size.Y / 2)
+		end
+	end
+	local height = top - housing.Position.Y + 0.65
+	addPill(housing, "RoleLabel", string.upper(role.Name), rgb(role.Color), 2.6, height)
+	local names, rarest: any = {}, nil
+	for _, modifierId in ipairs(definition.Modifiers or {}) do
+		local modifier = MachineModifiers.get(modifierId)
+		if modifier then
+			table.insert(names, string.upper(modifier.DisplayName))
+			if not rarest or modifier.ChanceDenominator > rarest.ChanceDenominator then
+				rarest = modifier
+			end
+		end
+	end
+	if rarest then
+		local text = table.concat(names, " · ")
+		addPill(housing, "ModifierLabel", text, rgb(rarest.Color), math.max(2.6, #text * 0.17), height + 0.75)
+	end
+end
+
 function Builder.build(parent: Instance, origin: Vector3, slot: number, definition: any): (Model, Part, Part?)
 	local profileKey = definition.VisualStyle or (if definition.Category == "Producer" then "Dropper" else definition.Category)
 	local profile = Visuals.Profiles[profileKey] or Visuals.Profiles.Processor
-	local variant = Visuals.Variants[definition.Id] or {}
+	local variant = Visuals.Variants[definition.BaseId or definition.Id] or {}
 	local themedType = CubeTypeDefinitions.get(definition.CubeType or definition.TypeFilter or "")
 	local themedColor = themedType and themedType.Color or nil
 	local primaryColor = variant.PrimaryColor or (themedColor or profile.PrimaryColor)
