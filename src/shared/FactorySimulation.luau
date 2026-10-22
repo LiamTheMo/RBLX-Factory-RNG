@@ -206,11 +206,20 @@ function FactorySimulation:_processItemAtSlot(item: Item): boolean
 			label ..= " · size ×" .. NumberFormatter.format(definition.SizeScale or 1)
 		elseif behavior == "AdjustThroughput" then
 			label ..= " · speed ×" .. NumberFormatter.format(1 / (definition.TravelScale or 1))
-		elseif behavior == "RandomMultiplier" then
+		end
+		-- Size, paint and speed machines also carry a value bonus so each one is worth placing.
+		local sideBonus = (behavior == "ScaleVisual" or behavior == "SetMaterial" or behavior == "AdjustThroughput") and definition.Multiplier
+		if sideBonus then
+			label ..= " ×" .. NumberFormatter.format(sideBonus)
+		end
+		if behavior == "RandomMultiplier" then
 			label ..= " ×" .. NumberFormatter.format(if item.Id % 2 == 0 then 3 else 0.5)
 		end
 		if #item.ModifierLabels < FactoryConfig.MaxItemModifierLabels then
 			table.insert(item.ModifierLabels, label)
+		end
+		if sideBonus then
+			item.Value = math.min(item.Value * sideBonus, self.maxItemValue)
 		end
 		if behavior == "MultiplyValue" then
 			item.Value = math.min(item.Value * (definition.Multiplier or 1), self.maxItemValue)
@@ -227,13 +236,14 @@ function FactorySimulation:_processItemAtSlot(item: Item): boolean
 		elseif behavior == "DuplicateItem" then
 			if item.SlotIndex < #self.route then
 				self.nextItemId += 1
+				-- The copy leaves the duplicator half a segment behind the original.
 				table.insert(self.pendingItems, {
 					Id = self.nextItemId,
 					Value = item.Value,
 					BaseValue = item.BaseValue,
 					ModifierLabels = table.clone(item.ModifierLabels),
-					SlotIndex = item.SlotIndex + 1,
-					TimeRemaining = self.travelTimePerSlotSeconds,
+					SlotIndex = item.SlotIndex,
+					TimeRemaining = self.travelTimePerSlotSeconds * 1.5,
 					SourceMachineId = item.SourceMachineId,
 					TypeId = item.TypeId,
 					TypeModifiers = table.clone(item.TypeModifiers),
@@ -275,15 +285,11 @@ function FactorySimulation:_advanceItem(item: Item, deltaTime: number): boolean
 		return false
 	end
 
+	-- A cube travels from each machine toward the next. Machines act the moment the cube
+	-- reaches them, so paint, size and value changes show as it passes under the machine
+	-- (not one slot later, which used to land at the seller after the sale).
 	item.TimeRemaining -= deltaTime
 	while item.TimeRemaining <= 1e-9 do
-		if self:_processItemAtSlot(item) then
-			return true
-		end
-		if item.ReadyForSale then
-			return false
-		end
-
 		item.SlotIndex += 1
 		if item.SlotIndex > #self.route then
 			-- A valid Phase 1 route always has a seller. This guard prevents a bad
@@ -295,6 +301,9 @@ function FactorySimulation:_advanceItem(item: Item, deltaTime: number): boolean
 			item.ReadyForSale = true
 			item.TimeRemaining = 0
 			return false
+		end
+		if self:_processItemAtSlot(item) then
+			return true
 		end
 
 		item.TimeRemaining += self.travelTimePerSlotSeconds * item.TravelScale

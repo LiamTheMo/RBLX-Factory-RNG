@@ -53,7 +53,22 @@ valueChain:step(0.4)
 sellReadyItems(valueChain)
 local valueSnapshot = valueChain:getSnapshot()
 expect(valueSnapshot.SoldItems == 1, "the value chain should sell its first item")
-expect(valueSnapshot.Coins == 2, "goldenizer should provide a bounded value multiplier")
+expect(valueSnapshot.Coins == 3, "giantifier (1.5×) and goldenizer (2×) should both add value")
+
+-- Machines change the cube as it reaches them, well before the seller: paint and size are
+-- visible on the belt, not applied at the sale.
+local paintChain = FactorySimulation.new({
+	Route = { "BasicDropper", "PaintMachine", "Giantifier", "Seller" },
+	SpawnIntervalSeconds = 10,
+	TravelTimePerSlotSeconds = 1,
+})
+paintChain:step(1.05)
+local painted = paintChain:getActiveItemsForDebug()[1]
+expect(painted and painted.SlotIndex == 2 and painted.VisualState == "Painted" and painted.Value == 1.25, "paint applies as the cube reaches the paint machine")
+expect(not painted.ReadyForSale and painted.SizeScale == 1, "the cube is still on the belt and not yet enlarged")
+paintChain:step(1)
+local enlarged = paintChain:getActiveItemsForDebug()[1]
+expect(enlarged and enlarged.SlotIndex == 3 and enlarged.SizeScale == 1.8 and not enlarged.ReadyForSale, "size applies at the Giantifier, before the seller")
 
 local duplicateChain = FactorySimulation.new({
 	Route = { "BasicDropper", "Duplicator", "Seller" },
