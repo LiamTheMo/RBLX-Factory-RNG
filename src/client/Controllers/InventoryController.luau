@@ -756,7 +756,10 @@ function InventoryController.start()
 
 	for category, button in pairs(categoryTabs) do
 		button.Activated:Connect(function()
-			local slot = if mode == "Placement" then placementSlotFor(category) else nil
+			-- While placing, a machine tab retargets the placement; tapping the tab that is
+			-- already selected goes back to browsing that category's inventory.
+			local current = if mode == "Placement" and targetSlot then FactoryLayout.expectedCategoryForSlot(targetSlot) else nil
+			local slot = if mode == "Placement" and category ~= current then placementSlotFor(category) else nil
 			activeCategory = category
 			if slot then
 				targetSlot = slot

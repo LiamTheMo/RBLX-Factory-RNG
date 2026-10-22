@@ -139,6 +139,7 @@ and free rolls still go through the existing validated remotes.
   and drop interval); the header shows `Owned n/200`; the tab bar stays visible while placing,
   and a machine tab moves the placement to a matching area (Droppers → area 1, Sellers → seller
   bay, Upgraders → the current or first open upgrader area; Boosters returns to the inventory).
+  Tapping the already-selected tab while placing goes back to browsing that category.
 
 ## Completed / Passed
 

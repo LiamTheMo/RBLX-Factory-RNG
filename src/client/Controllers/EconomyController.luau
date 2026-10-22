@@ -366,6 +366,7 @@ function EconomyController.start()
 		end)
 		if not success then
 			setStatus("Server request failed. Try again.", false)
+			setUpgradeStatus("Server request failed. Try again.", false)
 			return nil
 		end
 		return response
@@ -424,7 +425,8 @@ function EconomyController.start()
 		end
 		local threshold = EconomyRules.sanitizeAutoRecycle(state.AutoRecycleBelow)
 		recycleValue.Text = EconomyRules.formatAutoRecycle(threshold)
-		if not recycleInput:IsFocused() then
+		-- Only show the saved value while the player has no unsaved typing in the box.
+		if not recycleInput:IsFocused() and recycleInput:GetAttribute("Edited") ~= true then
 			recycleInput.Text = if threshold > 0 then EconomyRules.formatAutoRecycle(threshold) else ""
 		end
 		if not state.DataReady then
@@ -474,7 +476,7 @@ function EconomyController.start()
 
 	capacity.Activated:Connect(function()
 		if capacity:GetAttribute("GlassDisabled") == true then
-			if state and state.CapacityCost then
+			if state and state.CapacityCost and state.DataReady == true then
 				setUpgradeStatus(`Need {NumberFormatter.format(state.CapacityCost)} Coins to expand.`, false)
 			end
 			return
@@ -493,7 +495,7 @@ function EconomyController.start()
 			local upgrade = UpgradeRules.get(upgradeId)
 			local cost = state and UpgradeRules.nextCost(state.Upgrades, upgradeId)
 			if row.Buy:GetAttribute("GlassDisabled") == true then
-				if cost then
+				if cost and state and state.DataReady == true then
 					setUpgradeStatus(`Need {NumberFormatter.format(cost)} Coins.`, false)
 				end
 				return
@@ -511,6 +513,7 @@ function EconomyController.start()
 	local function saveAutoRecycle(threshold: number)
 		local response = invoke(setAutoRecycle, threshold)
 		if response and response.Success then
+			recycleInput:SetAttribute("Edited", nil)
 			local saved = EconomyRules.sanitizeAutoRecycle(response.AutoRecycleBelow)
 			setStatus(if saved > 0 then `Auto-recycling rolls more common than {EconomyRules.formatAutoRecycle(saved)}.` else "Auto-recycle is off.", true)
 			refresh(response)
@@ -518,6 +521,11 @@ function EconomyController.start()
 			setStatus(response.Reason or "Setting unavailable.", false)
 		end
 	end
+	recycleInput:GetPropertyChangedSignal("Text"):Connect(function()
+		if recycleInput:IsFocused() then
+			recycleInput:SetAttribute("Edited", true)
+		end
+	end)
 	recycleSave.Activated:Connect(function()
 		local threshold = EconomyRules.parseAutoRecycle(recycleInput.Text)
 		if not threshold then
