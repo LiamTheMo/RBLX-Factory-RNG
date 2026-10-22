@@ -56,6 +56,8 @@ expect(EconomyRules.sanitizeAutoRecycle(1) == 0 and EconomyRules.sanitizeAutoRec
 expect(EconomyRules.formatAutoRecycle(1000) == "1/1000" and EconomyRules.formatAutoRecycle(50000) == "1/50,000" and EconomyRules.formatAutoRecycle(0) == "Off", "thresholds format like card odds")
 expect(EconomyRules.shouldAutoRecycle(40, 1000) and not EconomyRules.shouldAutoRecycle(1000, 1000) and not EconomyRules.shouldAutoRecycle(5000, 1000), "only rolls more common than the threshold are recycled")
 expect(not EconomyRules.shouldAutoRecycle(40, 0) and not EconomyRules.shouldAutoRecycle(nil, 1000), "off or unknown odds keep the machine")
+expect(EconomyRules.formatOddsDenominator(10_666.67) == "10,667" and not EconomyRules.shouldAutoRecycle(10_666.67, 10_667), "typing the displayed odds keeps the machine")
+expect(EconomyRules.shouldAutoRecycle(10_666.67, 10_668) and not EconomyRules.shouldAutoRecycle(39.96, 40), "rounding matches the card on both sides of 10,000")
 -- The server compares the odds shown on cards: a common machine goes, its Golden version stays.
 local pool = MachineDefinitions.getRollPool()
 local common = assert(EconomyRules.getMachineOddsDenominator("PolishedRoller", pool))

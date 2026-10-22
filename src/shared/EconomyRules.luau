@@ -171,9 +171,15 @@ function EconomyRules.getMachineOddsLabel(machineId: any, rollPool: { [number]: 
 	return "1/" .. EconomyRules.formatOddsDenominator(denominator)
 end
 
+-- The denominator as cards show it: one decimal below 10,000, whole numbers above.
+function EconomyRules.displayedOddsDenominator(denominator: number): number
+	local rounded = math.floor(denominator * 10 + 0.5) / 10
+	return if rounded < 10_000 then rounded else math.floor(rounded + 0.5)
+end
+
 -- "40", "12.5", and digit groups from 10,000 up ("1,000,000") so long odds stay readable.
 function EconomyRules.formatOddsDenominator(denominator: number): string
-	local rounded = math.floor(denominator * 10 + 0.5) / 10
+	local rounded = EconomyRules.displayedOddsDenominator(denominator)
 	if rounded < 10_000 then
 		return if rounded % 1 == 0 then string.format("%.0f", rounded) else string.format("%.1f", rounded)
 	end
@@ -240,8 +246,10 @@ function EconomyRules.formatAutoRecycle(threshold: number): string
 	return if threshold > 0 then "1/" .. EconomyRules.formatOddsDenominator(threshold) else "Off"
 end
 
+-- Compares the odds as cards show them, so typing a machine's displayed odds keeps it.
 function EconomyRules.shouldAutoRecycle(oddsDenominator: number?, threshold: number): boolean
-	return threshold > 0 and type(oddsDenominator) == "number" and oddsDenominator < threshold
+	return threshold > 0 and type(oddsDenominator) == "number"
+		and EconomyRules.displayedOddsDenominator(oddsDenominator) < threshold
 end
 
 function EconomyRules.getResaleValue(rarity: any): number
