@@ -123,6 +123,10 @@ and free rolls still go through the existing validated remotes.
   role pill on placed machines. Effect tags show the modified numbers.
 - **Sources:** machines, rarities and modifiers declare where they are obtainable; cards and the
   roll result show it ("Any roll"). Future weather, events and places plug in as sources.
+- **Owner decisions:** sellers get the bonus on every sale, conditional upgraders only when they
+  apply, Luck doesn't change modifier chances, rarity stays the base machine's (all confirmed).
+- **Inventory tag check:** the Studio smoke harness grants `ValueMultiplier+Golden` and asserts the
+  card's GOLDEN tag, its "Golden Value Multiplier" name and its modified odds.
 
 ## Completed / Passed
 
