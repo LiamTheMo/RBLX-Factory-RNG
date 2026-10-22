@@ -25,6 +25,15 @@ expect(UpgradeRules.level({ Luck = 99 }, "Luck") == UpgradeRules.maxLevel("Luck"
 expect(UpgradeRules.level({ Luck = -1 }, "Luck") == 0 and UpgradeRules.level({ Luck = 0 / 0 }, "Luck") == 0, "bad levels read as 0")
 expect(UpgradeRules.nextCost({}, "Luck") == assert(UpgradeRules.get("Luck")).Costs[1], "the first level costs the first price")
 expect(UpgradeRules.nextCost({ Luck = UpgradeRules.maxLevel("Luck") }, "Luck") == nil, "maxed upgrades have no next cost")
+for _, upgrade in ipairs(UpgradeRules.Definitions) do
+	expect(#upgrade.Costs == upgrade.MaxLevel and upgrade.Costs[1] == upgrade.BaseCost, `{upgrade.Id} lists one cost per level`)
+	for level = 2, #upgrade.Costs do
+		local ratio = upgrade.Costs[level] / upgrade.Costs[level - 1]
+		expect(ratio >= upgrade.Growth * 0.9 and ratio <= upgrade.Growth * 1.1, `{upgrade.Id} costs grow ×{upgrade.Growth} per level`)
+	end
+end
+local luckCosts = assert(UpgradeRules.get("Luck")).Costs
+expect(luckCosts[1] == 250 and luckCosts[2] == 1_500 and luckCosts[5] == 320_000, "Lucky Rolls prices climb steeply")
 expect(UpgradeRules.nextCost({}, "Nope") == nil and UpgradeRules.get("Nope") == nil, "unknown upgrades are rejected")
 expect(near(UpgradeRules.luckMultiplier({ Luck = 2 }), 1.2), "each Lucky Rolls level adds 10% luck")
 expect(near(UpgradeRules.saleMultiplier({ SaleValue = 3 }), 1.3), "each Better Prices level adds 10% sale value")

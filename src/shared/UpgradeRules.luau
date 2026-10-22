@@ -1,15 +1,20 @@
 --!strict
 -- Permanent Coin upgrades bought from the Upgrades panel (factory capacity stays in
 -- EconomyConfig.CapacityCosts). Pure data and rules: the server owns levels and charges
--- Coins; the client reads the same costs and effects for display. Costs are provisional
--- balance data for playtests.
+-- Coins; the client reads the same costs and effects for display. Costs grow
+-- exponentially (BaseCost × Growth^(level - 1), rounded to two significant digits) and are
+-- provisional balance data for playtests.
 
 export type Upgrade = {
 	Id: string,
 	DisplayName: string,
 	Description: string,
 	Order: number,
-	-- Coins for each next level; the number of entries is the max level.
+	-- Coins for level 1, the multiplier applied for each further level, and the max level.
+	BaseCost: number,
+	Growth: number,
+	MaxLevel: number,
+	-- Coins for each next level, built from the three fields above.
 	Costs: { number },
 	-- Effect added per level: luck/sale multiplier (+0.1 = +10%) or seconds off the roll cooldown.
 	PerLevel: number,
@@ -17,21 +22,36 @@ export type Upgrade = {
 
 local UpgradeRules = {}
 
+-- Two significant digits keep prices readable: 54,000 × 6 lists as 320,000.
+local function roundCost(value: number): number
+	local magnitude = 10 ^ math.max(0, math.floor(math.log10(value)) - 1)
+	return math.floor(value / magnitude + 0.5) * magnitude
+end
+
+local function defineUpgrade(fields: { [string]: any }): Upgrade
+	local costs = {}
+	for level = 1, fields.MaxLevel do
+		costs[level] = roundCost(fields.BaseCost * fields.Growth ^ (level - 1))
+	end
+	fields.Costs = table.freeze(costs)
+	return table.freeze(fields) :: any
+end
+
 UpgradeRules.Definitions = table.freeze({
-	table.freeze({
+	defineUpgrade({
 		Id = "Luck", DisplayName = "Lucky Rolls", Order = 1, PerLevel = 0.1,
 		Description = "Rarer machines roll more often (stacks with Luck boosters).",
-		Costs = table.freeze({ 150, 500, 1_500, 5_000, 15_000 }),
+		BaseCost = 250, Growth = 6, MaxLevel = 5,
 	}),
-	table.freeze({
+	defineUpgrade({
 		Id = "SaleValue", DisplayName = "Better Prices", Order = 2, PerLevel = 0.1,
 		Description = "Every sale pays more (stacks with Coin boosters).",
-		Costs = table.freeze({ 100, 400, 1_200, 4_000, 12_000 }),
+		BaseCost = 200, Growth = 5, MaxLevel = 5,
 	}),
-	table.freeze({
+	defineUpgrade({
 		Id = "RollSpeed", DisplayName = "Quick Rolls", Order = 3, PerLevel = 0.5,
 		Description = "Shorter wait between rolls.",
-		Costs = table.freeze({ 200, 800, 3_000 }),
+		BaseCost = 500, Growth = 8, MaxLevel = 3,
 	}),
 } :: { Upgrade })
 
@@ -113,8 +133,8 @@ end
 
 function UpgradeRules.validate(): (boolean, string?)
 	for _, upgrade in ipairs(UpgradeRules.Definitions) do
-		if #upgrade.Costs == 0 or upgrade.PerLevel <= 0 then
-			return false, `Upgrade {upgrade.Id} needs costs and a positive effect`
+		if #upgrade.Costs == 0 or upgrade.PerLevel <= 0 or upgrade.Growth <= 1 then
+			return false, `Upgrade {upgrade.Id} needs costs, a positive effect and growing prices`
 		end
 		local previous = 0
 		for _, cost in ipairs(upgrade.Costs) do

@@ -142,13 +142,13 @@ Every roll also rolls each modifier independently on the chosen machine (`src/sh
 `src/shared/RollSources.luau` defines sources. A source is active when the roll context has every condition it requires (`Weather:*`, `Event:*`, `Zone:*`, `Effect:*`). Machines (`Sources` field, default `StandardRoll`), rarity bands (`EconomyConfig.RarityOddsBands[*].Sources`) and modifiers (`Sources`) are obtainable while any of their sources is active. The server builds the context in `RollSources.conditionsForRoll`; today it only adds `Effect:Luck` while a Luck booster is active (the `LuckyRoll` source). Weather, events and special places add a source, tag content with it, and add their condition to the context. Rarities with no obtainable machine drop out of the rarity draw. Inventory cards and the roll result show where a machine is found.
 ### Upgrades and auto-recycle
 
-The Upgrades button (top right, beside Settings) holds factory capacity (`EconomyConfig.CapacityCosts`) and permanent Coin upgrades from `src/shared/UpgradeRules.luau`. Costs are provisional playtest data:
+The Upgrades button (top right, beside Settings) holds factory capacity (`EconomyConfig.CapacityCosts`) and permanent Coin upgrades from `src/shared/UpgradeRules.luau`. Costs grow exponentially: `BaseCost × Growth^(level − 1)`, rounded to two significant digits. They are provisional playtest data:
 
-| Upgrade | Per level | Levels | Costs (Coins) |
-| --- | --- | ---: | --- |
-| Lucky Rolls | +10% roll luck | 5 | 150, 500, 1,500, 5,000, 15,000 |
-| Better Prices | +10% sale value | 5 | 100, 400, 1,200, 4,000, 12,000 |
-| Quick Rolls | −0.5 s roll cooldown (floor 1 s) | 3 | 200, 800, 3,000 |
+| Upgrade | Per level | Levels | Growth | Costs (Coins) |
+| --- | --- | ---: | ---: | --- |
+| Lucky Rolls | +10% roll luck | 5 | ×6 | 250, 1,500, 9,000, 54,000, 320,000 |
+| Better Prices | +10% sale value | 5 | ×5 | 200, 1,000, 5,000, 25,000, 130,000 |
+| Quick Rolls | −0.5 s roll cooldown (floor 1 s) | 3 | ×8 | 500, 4,000, 32,000 |
 
 - Coins only; no Robux. Lucky Rolls multiplies with the Luck booster up to `EconomyConfig.MaxLuckMultiplier` (3). Any luck above ×1, booster or upgrade, activates the `Effect:Luck` roll condition. Better Prices multiplies with the Coin booster in the sale buff layer.
 - The server owns levels: `BuyUpgrade(upgradeId)` validates the ID and max level, debits the next cost, and saves the levels as `Upgrades` in the player's data.
