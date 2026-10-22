@@ -578,6 +578,12 @@ function RollReveal.mount(gui: ScreenGui)
 			oddsChip.Size = UDim2.fromOffset(0, 26)
 		end
 		local definition = info.Definition
+		local role = MachineEffects.role(definition)
+		if role then
+			local roleChip = GlassUI.chip(tags, "Role", string.upper(role.Name), GlassUI.fromRgb(role.Color), 13)
+			roleChip.LayoutOrder = 0
+			roleChip.Size = UDim2.fromOffset(0, 26)
+		end
 		if definition then
 			local effectChip = GlassUI.chip(tags, "Effect", MachineEffects.tag(definition), C.Text, 13)
 			effectChip.LayoutOrder = 3

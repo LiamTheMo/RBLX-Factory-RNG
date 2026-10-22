@@ -417,6 +417,13 @@ function InventoryController.start()
 		card:SetAttribute("Description", definition and definition.Description or "")
 		if definition then
 			addPreview(well, definition)
+			local role = MachineEffects.role(definition)
+			if role then
+				-- Corner badge on the preview: what job the machine does on the belt.
+				local roleChip = GlassUI.chip(well, "Role", string.upper(role.Name), GlassUI.fromRgb(role.Color), 11)
+				roleChip.Position = UDim2.fromOffset(6, 6)
+				roleChip.ZIndex = 2
+			end
 		end
 		return card, actions
 	end
